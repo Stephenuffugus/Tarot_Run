@@ -1432,9 +1432,25 @@ const state = {
     runsAttempted: 0,
     bestFloor: 0,
     relicsFound: {},         // id -> true
+    insight: 0,              // persistent currency earned every run
+    mirror: {},              // Mirror talent id -> rank
+    veil: 0,                 // highest Veil unlocked
+    selectedVeil: 0,         // Veil chosen for the next run
   },
   run: null,
 };
+
+/* ============ THE VEILS — cumulative difficulty ladder ============
+   Veil 0 is the base game. Each cleared run unlocks the next. Mods are
+   applied at run/combat start (see applyVeil). Long-term mastery hook. */
+const VEILS = [
+  { name:'No Veil',    desc:'The tower as written.',                         mods:{} },
+  { name:'Veil I',     desc:'Enemies have +12% HP.',                          mods:{ enemyHp:1.12 } },
+  { name:'Veil II',    desc:'+12% enemy HP. The Hermit heals less (30%).',    mods:{ enemyHp:1.12, restHeal:0.30 } },
+  { name:'Veil III',   desc:'+12% HP. Less rest. Enemies hit ~10% harder.',   mods:{ enemyHp:1.12, restHeal:0.30, enemyDmg:1.10 } },
+  { name:'Veil IV',    desc:'All the above, and you start with 54 HP.',       mods:{ enemyHp:1.12, restHeal:0.30, enemyDmg:1.10, maxHp:54 } },
+  { name:'Veil V',     desc:'Harsher still. Enemies +20% HP, hit +20%.',      mods:{ enemyHp:1.20, restHeal:0.30, enemyDmg:1.20, maxHp:54 } },
+];
 
 /* ============ PATRONS — who takes you as their Querent ============
    Each Patron is a character: a suit-leaning 16-card starter deck and a
@@ -1993,11 +2009,12 @@ function showSpreadModal(choices){
 
 function onCombatLoss(){
   state.meta.runsAttempted += 1;
+  const gained = awardInsight(false);
   saveState();
   showModal({
     title: 'The Reading Cuts',
-    body: `You reached floor ${state.run.floor + 1} of 15.`,
-    sub: `The Crowned Fool watches from his tower still.`,
+    body: `You reached floor ${state.run.floor + 1} of 15.<br><br><strong>+${gained} Insight</strong> &nbsp;·&nbsp; ${state.meta.insight} total`,
+    sub: `Every reading teaches. Spend Insight at The Mirror.`,
     choices: [
       { label: 'Return to the Library', onClick: () => { state.run = null; saveState(); showScreen('title-screen'); refreshTitle(); } }
     ]
@@ -2053,11 +2070,15 @@ function advanceFloor(){
 function onRunVictory(){
   state.meta.runsCompleted += 1;
   state.meta.bestFloor = Math.max(state.meta.bestFloor, 15);
+  const gained = awardInsight(true);
+  // Unlock the next Veil of difficulty
+  const clearedVeil = (state.run && state.run.veil) || 0;
+  state.meta.veil = Math.max(state.meta.veil || 0, Math.min(clearedVeil + 1, VEILS.length - 1));
   saveState();
   showModal({
     title: 'The Crown Falls',
-    body: 'The Fool of crowns sees his own face and laughs once before silence.',
-    sub: 'You have reached the top of the tower.',
+    body: `The Fool of crowns sees his own face and laughs once before silence.<br><br><strong>+${gained} Insight</strong> &nbsp;·&nbsp; ${state.meta.insight} total`,
+    sub: `Veil ${state.meta.veil} unlocked. You have reached the top of the tower.`,
     choices: [
       { label: 'Return to the Library', onClick: () => { state.run = null; saveState(); showScreen('title-screen'); refreshTitle(); } }
     ]
@@ -2703,7 +2724,27 @@ function loadState(){
     if(d.version !== VERSION) return;
     if(d.meta) state.meta = d.meta;
     if(d.run) state.run = d.run;
+    migrateMeta();
   } catch(e){}
+}
+// Fill any meta fields missing from older saves — never bump VERSION,
+// so an in-progress run is never discarded.
+function migrateMeta(){
+  const m = state.meta;
+  if(m.insight == null) m.insight = 0;
+  if(m.mirror == null) m.mirror = {};
+  if(m.veil == null) m.veil = 0;
+  if(m.selectedVeil == null) m.selectedVeil = 0;
+  if(m.relicsFound == null) m.relicsFound = {};
+  if(m.discoveredCards == null) m.discoveredCards = {};
+}
+// Insight earned at the end of a run — you always progress, win or lose.
+function awardInsight(victory){
+  const run = state.run;
+  const floorReached = run ? (run.floor || 0) : 0;
+  const gained = 10 + floorReached * 6 + (victory ? 120 : 0);
+  state.meta.insight = (state.meta.insight || 0) + gained;
+  return gained;
 }
 
 function refreshTitle(){
@@ -2717,7 +2758,7 @@ function refreshTitle(){
     document.getElementById('btn-new-run').textContent = 'Begin the Reading';
   }
   const discovered = Object.keys(meta.discoveredCards||{}).length;
-  m.textContent = `${discovered}/78 cards inscribed · ${meta.runsCompleted||0} crowns claimed`;
+  m.textContent = `${discovered}/78 cards inscribed · ${meta.runsCompleted||0} crowns · ${meta.insight||0} Insight`;
 }
 
 /* =====================================================================
