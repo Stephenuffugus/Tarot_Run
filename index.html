@@ -1467,6 +1467,35 @@ function buildPatronDeck(primary){
   return deck;
 }
 
+/* ============ THE SPREAD — persistent Arcana boons ============
+   Claim a Major Arcanum after an elite. It's a permanent run passive
+   that fires at the start of every combat — the Hades-style choice
+   that defines your build mid-run. */
+const ARCANA_BOONS = {
+  'major-4':  { name:'The Emperor',        glyph:'♚', desc:'Begin each combat with 12 Block.',
+    start:(p)=>{ p.block += 12; } },
+  'major-19': { name:'The Sun',            glyph:'☀', desc:'Begin each combat with +2 Strength.',
+    start:(p)=>{ p.buffs.strength = (p.buffs.strength||0) + 2; } },
+  'major-17': { name:'The Star',           glyph:'✶', desc:'Begin each combat: heal 8.',
+    start:(p)=>{ p.hp = Math.min(p.maxHp, p.hp + 8); } },
+  'major-2':  { name:'The High Priestess', glyph:'☽', desc:'Begin each combat with 8 Ward.',
+    start:(p)=>{ p.buffs.ward = (p.buffs.ward||0) + 8; } },
+  'major-3':  { name:'The Empress',        glyph:'♀', desc:'Begin each combat: 6 Block and heal 4.',
+    start:(p)=>{ p.block += 6; p.hp = Math.min(p.maxHp, p.hp + 4); } },
+  'major-1':  { name:'The Magician',       glyph:'☿', desc:'Gain +1 energy on turn 1 of each combat.',
+    start:(p)=>{ p.energy += 1; } },
+  'major-7':  { name:'The Chariot',        glyph:'⛣', desc:'Begin each combat with +1 Strength and 6 Block.',
+    start:(p)=>{ p.buffs.strength = (p.buffs.strength||0) + 1; p.block += 6; } },
+  'major-21': { name:'The World',          glyph:'❂', desc:'Begin each combat with +1 Strength, 6 Block, 6 Ward.',
+    start:(p)=>{ p.buffs.strength = (p.buffs.strength||0) + 1; p.block += 6; p.buffs.ward = (p.buffs.ward||0) + 6; } },
+};
+function applyArcanaStart(player, run){
+  (run.spread || []).forEach(id => {
+    const b = ARCANA_BOONS[id];
+    if(b && b.start) b.start(player, run);
+  });
+}
+
 function freshRun(seedStr, patronId){
   const seed = strHash(seedStr || ('run-' + Date.now()));
   const rng = mulberry32(seed);
@@ -1481,6 +1510,7 @@ function freshRun(seedStr, patronId){
   return {
     seed: seedStr, rngSeed: seed,
     patron: patron.id,
+    spread: [],          // claimed Arcana boon ids (persistent run passives)
     floor: 0,
     hp: 60, maxHp: 60,
     gold: 0,
@@ -1584,6 +1614,8 @@ function startCombat(enemyId){
   if(run.relics.includes('wax-mask')) player.block += 6;
   // Fool's Feather
   if(run.relics.includes('fools-feather')) player.hand.push({ cardId:'major-0', reversed:false, ephemeral:true });
+  // The Spread: persistent Arcana boons
+  applyArcanaStart(player, run);
 
   const enemy = {
     hp: enemyDef.hp + Math.floor(run.floor * 1.2),
@@ -1928,7 +1960,35 @@ function onCombatWin(){
     if(!offered.find(o => o.id === c.id)) offered.push(c);
   }
 
-  showRewardModal(offered, isBoss);
+  showRewardModal(offered, isBoss, isElite);
+}
+
+// After a card reward: elites also offer an Arcanum for The Spread.
+function finishReward(isElite){
+  const taken = new Set(state.run.spread || []);
+  const choices = Object.keys(ARCANA_BOONS).filter(id => !taken.has(id));
+  if(isElite && choices.length){
+    showSpreadModal(choices);
+  } else {
+    advanceFloor();
+  }
+}
+
+function showSpreadModal(choices){
+  const rng = state.run.combat ? state.run.combat.rng : mulberry32(state.run.rngSeed + state.run.floor);
+  const pool = choices.slice();
+  shuffleInPlace(pool, rng);
+  const offered = pool.slice(0, 3);
+  const have = (state.run.spread||[]).map(id => ARCANA_BOONS[id] && ARCANA_BOONS[id].name).filter(Boolean);
+  showModal({
+    title: 'The Spread Deepens',
+    sub: have.length ? `Your Spread: ${have.join(' · ')}` : 'Claim an Arcanum — it binds to you for the whole climb.',
+    choices: offered.map(id => {
+      const b = ARCANA_BOONS[id];
+      return { icon:b.glyph, label:b.name, note:b.desc,
+        onClick: () => { (state.run.spread = state.run.spread || []).push(id); saveState(); advanceFloor(); } };
+    }).concat([{ icon:'⛒', label:'Refuse the cards', note:'Take nothing. Advance.', onClick:()=>advanceFloor() }])
+  });
 }
 
 function onCombatLoss(){
@@ -2028,7 +2088,7 @@ function showModal({ title, sub, body, choices, hideClose }){
   veil.classList.add('active');
 }
 
-function showRewardModal(offered, isBoss){
+function showRewardModal(offered, isBoss, isElite){
   const veil = document.getElementById('modal-veil');
   const m = document.getElementById('modal');
   m.innerHTML = `
@@ -2046,7 +2106,7 @@ function showRewardModal(offered, isBoss){
       state.meta.discoveredCards[card.id] = state.meta.discoveredCards[card.id] || { name: card.name, seen: 0, played: 0 };
       state.meta.discoveredCards[card.id].seen += 1;
       veil.classList.remove('active');
-      advanceFloor();
+      finishReward(isElite);
     };
     grid.appendChild(el);
   });
@@ -2057,7 +2117,7 @@ function showRewardModal(offered, isBoss){
   skip.onclick = () => {
     state.run.gold += isBoss ? 20 : 8;
     veil.classList.remove('active');
-    advanceFloor();
+    finishReward(isElite);
   };
   choices.appendChild(skip);
   veil.classList.add('active');

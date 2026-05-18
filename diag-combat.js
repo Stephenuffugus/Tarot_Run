@@ -81,3 +81,12 @@ const plain = playInjected(false);
 const study = playInjected(true);
 console.log(`  Two of Wands plain=${plain}  studied=${study}  (expect studied = plain+2)`);
 console.log('  RESULT:', study === plain + 2 ? 'PASS — Study adds +2' : 'FAIL — Study not applied');
+
+console.log('\n--- TEST F: a Spread Arcanum fires at combat start ---');
+const fr = game.freshRun('spread-seed', 'magician'); game.state.run = fr;
+fr.spread = ['major-4','major-19']; // The Emperor (+12 Block), The Sun (+2 Str)
+fr.floor = 0; fr.path[0].chosenNode = 0; fr.currentNode = fr.path[0].nodes[0];
+game.startCombat(fr.path[0].nodes[0].enemyId);
+const fb = fr.combatPlayer.block, fs2 = (fr.combatPlayer.buffs.strength||0);
+console.log(`  start block=${fb} (expect >=12)  strength=${fs2} (expect >=2)`);
+console.log('  RESULT:', (fb>=12 && fs2>=2) ? 'PASS — Spread boons applied at combat start' : 'FAIL');
