@@ -388,16 +388,45 @@ body::after{
   margin-bottom: 4px; text-align:center;
 }
 .enemy-intent{
-  font-family: var(--font-body); font-style: italic;
-  font-size: 13px; color: var(--ornament-gold);
+  font-family: var(--font-body);
   letter-spacing: 0.02em;
-  margin-bottom: 6px; min-height: 18px;
+  margin: 4px auto 8px; min-height: 18px;
   text-align:center;
 }
-.enemy-intent .intent-icon{
-  display:inline-block; margin-right: 4px;
-  font-style: normal;
+.enemy-intent.intent-card{
+  display:inline-block; padding: 6px 16px 7px;
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.14);
+  background: rgba(0,0,0,0.28);
+  box-shadow: 0 0 0 1px rgba(0,0,0,0.3) inset;
 }
+.enemy-intent .intent-head{
+  display:flex; align-items:center; justify-content:center; gap:6px;
+  line-height: 1;
+}
+.enemy-intent .intent-icon{ font-size: 22px; }
+.enemy-intent .intent-dmg{
+  font-family: var(--font-display);
+  font-size: 30px; font-weight: 700; line-height: 1;
+}
+.enemy-intent .intent-x{ font-size: 16px; opacity: 0.85; margin-left: 2px; }
+.enemy-intent .intent-sub{
+  font-size: 12px; font-style: italic; margin-top: 3px;
+  color: var(--card-cream); opacity: 0.92;
+}
+.enemy-intent .intent-sub b{ font-style: normal; letter-spacing: 0.04em; }
+.enemy-intent .intent-warn{ color:#ff8a7a; font-style:normal; font-weight:600; }
+.enemy-intent .intent-ok{ color:#7ad6a0; font-style:normal; }
+/* threat tiers */
+.intent-safe   { color: var(--ornament-gold); }
+.intent-safe   .intent-dmg,.intent-safe   .intent-icon{ color: var(--ornament-gold); }
+.intent-danger { border-color: rgba(255,138,122,0.55) !important; }
+.intent-danger .intent-dmg,.intent-danger .intent-icon{ color:#ff8a7a; }
+.intent-lethal { border-color:#ff5a4a !important; background: rgba(120,20,15,0.4) !important;
+  animation: intentPulse 1.1s ease-in-out infinite; }
+.intent-lethal .intent-dmg,.intent-lethal .intent-icon{ color:#ff5a4a; }
+@keyframes intentPulse{ 0%,100%{ box-shadow:0 0 0 1px rgba(255,90,74,0.3) inset; }
+  50%{ box-shadow:0 0 14px 1px rgba(255,90,74,0.6); } }
 .enemy-hp-row{ display:flex; align-items:center; gap:8px; width: 220px; }
 .enemy-hp-row .hp-bar{ flex:1; }
 .enemy-hp-row .hp-num{
@@ -963,8 +992,8 @@ const SUIT_FACTORIES = {
       play(ctx){ const bonus = ctx.enemy.hp >= ctx.enemy.maxHp ? 6 : 0; return dealDamage(ctx, 12 + bonus); } };
     if(n === 13) return { ...base, cost: 2, desc: 'Strike 9. Apply 2 Burn.', flavor: 'Crowned in cinder.',
       play(ctx){ return combine(dealDamage(ctx, 9), applyBurn(ctx, 2)); } };
-    if(n === 14) return { ...base, cost: 3, desc: 'Strike 18. Gain 1 energy.', flavor: 'The pyre answers only to itself.',
-      play(ctx){ const r = dealDamage(ctx, 18); ctx.player.energy += 1; return combine(r, {energyGained:1}); } };
+    if(n === 14) return { ...base, cost: 3, desc: 'Strike 10. +3 damage per Ember on the enemy. Gain 1 energy.', flavor: 'The pyre answers only to itself.',
+      play(ctx){ const ember = ctx.enemy.debuffs.burn || 0; const r = dealDamage(ctx, 10 + 3*ember); ctx.player.energy += 1; return combine(r, {energyGained:1}); } };
   },
 
   /* ======== CUPS (Water / Sustain) ======== */
@@ -991,8 +1020,8 @@ const SUIT_FACTORIES = {
       play(ctx){ return combine(healPlayer(ctx, 6), applyBuff(ctx, 'resolve', 1)); } };
     if(n === 13) return { ...base, cost: 2, desc: 'Heal 10. Reduce next damage taken by 6.', flavor: 'The queen weeps salt and lets you live.',
       play(ctx){ return combine(healPlayer(ctx, 10), applyBuff(ctx, 'ward', 6)); } };
-    if(n === 14) return { ...base, cost: 2, desc: 'Heal 14. Draw 2. Discard 1.', flavor: 'The deep king pours and pours.',
-      play(ctx){ return combine(healPlayer(ctx, 14), drawCards(ctx, 2), discardChoice(ctx, 1)); } };
+    if(n === 14) return { ...base, cost: 2, desc: 'Heal 10. Draw 2. If you have healed 20+ this combat, gain 2 energy.', flavor: 'The deep king pours and pours.',
+      play(ctx){ const r = combine(healPlayer(ctx, 10), drawCards(ctx, 2)); if((ctx.combat && ctx.combat.healedThisCombat || 0) >= 20){ ctx.player.energy += 2; return combine(r, {energyGained:2}); } return r; } };
   },
 
   /* ======== SWORDS (Air / Pierce & Debuff) ======== */
@@ -1016,8 +1045,8 @@ const SUIT_FACTORIES = {
       play(ctx){ return dealPierce(ctx, 8); } };
     if(n === 13) return { ...base, cost: 2, desc: 'Pierce 6. Apply Vulnerable (1 turn).', flavor: 'She does not blink.',
       play(ctx){ return combine(dealPierce(ctx, 6), applyDebuff(ctx, 'vulnerable', 1)); } };
-    if(n === 14) return { ...base, cost: 2, desc: 'Pierce 12. Apply Weak + Vulnerable.', flavor: 'The judgement throne.',
-      play(ctx){ return combine(dealPierce(ctx, 12), applyDebuff(ctx, 'weak', 1), applyDebuff(ctx, 'vulnerable', 1)); } };
+    if(n === 14) return { ...base, cost: 2, desc: 'Pierce 8. +2 damage per debuff on the enemy. Apply Weak + Vulnerable.', flavor: 'The judgement throne.',
+      play(ctx){ const debuffs = Object.entries(ctx.enemy.debuffs).filter(([k,v]) => v > 0 && k !== 'strength').length; const r = dealPierce(ctx, 8 + 2*debuffs); return combine(r, applyDebuff(ctx, 'weak', 1), applyDebuff(ctx, 'vulnerable', 1)); } };
   },
 
   /* ======== PENTACLES (Earth / Block & Wealth) ======== */
@@ -1041,8 +1070,8 @@ const SUIT_FACTORIES = {
       play(ctx){ return gainBlock(ctx, 14); } };
     if(n === 13) return { ...base, cost: 2, desc: 'Block 10. Gain 1 Plate (permanent +2 block).', flavor: 'Her court is iron.',
       play(ctx){ return combine(gainBlock(ctx, 10), applyBuff(ctx, 'plate', 1)); } };
-    if(n === 14) return { ...base, cost: 3, desc: 'Block 18. Heal 4.', flavor: 'The king of the deep field.',
-      play(ctx){ return combine(gainBlock(ctx, 18), healPlayer(ctx, 4)); } };
+    if(n === 14) return { ...base, cost: 3, desc: 'Block 16. Then Strike equal to half your Block.', flavor: 'The king of the deep field.',
+      play(ctx){ const b = gainBlock(ctx, 16); const r = dealDamage(ctx, Math.floor(ctx.player.block / 2)); return combine(b, r); } };
   },
 };
 
@@ -1281,7 +1310,9 @@ function gainBlock(ctx, raw){
 function healPlayer(ctx, raw){
   const before = ctx.player.hp;
   ctx.player.hp = Math.min(ctx.player.maxHp, ctx.player.hp + raw);
-  return { healing: ctx.player.hp - before };
+  const healed = ctx.player.hp - before;
+  if(ctx.combat) ctx.combat.healedThisCombat = (ctx.combat.healedThisCombat || 0) + healed;
+  return { healing: healed };
 }
 function drawCards(ctx, n){
   let drawn = 0;
@@ -1324,43 +1355,46 @@ function discardChoice(ctx, n){
    3. ENEMIES
    ===================================================================== */
 
+// Enemy intents now ALWAYS pressure the player. Riders (debuff/buff/selfBlock)
+// hang off an attack so no enemy turn is ever a free pass. value = damage,
+// scaled by floor at resolve time (see resolveEnemyIntent).
 const ENEMIES = [
-  // Tier 1
+  // Tier 1 — should cost a careless player ~15-22 HP per fight
   { id:'spectre',   name:'The Spectre',     tier:1, hp:22, glyph:'◌',
-    intents:[ {type:'attack', value:5, desc:'Wail'}, {type:'attack', value:3, desc:'Reach'}, {type:'block', value:5, desc:'Fade'} ] },
+    intents:[ {type:'attack', value:8, desc:'Wail'}, {type:'attack', value:5, selfBlock:5, desc:'Fading slash'}, {type:'attack', value:6, debuff:{key:'weak',value:1}, desc:'Dread reach'} ] },
   { id:'jackal',    name:'Brass Jackal',    tier:1, hp:28, glyph:'⚛',
-    intents:[ {type:'attack', value:6, desc:'Lunge'}, {type:'attack', value:4, count:2, desc:'Double snap'} ] },
+    intents:[ {type:'attack', value:10, desc:'Lunge'}, {type:'attack', value:5, count:2, desc:'Double snap'}, {type:'attack', value:6, buff:{key:'strength',value:2}, desc:'Bristle'} ] },
   { id:'echoman',   name:'The Echo-Man',    tier:1, hp:24, glyph:'⌭',
-    intents:[ {type:'attack', value:4, desc:'Mimic'}, {type:'debuff', key:'weak', value:1, desc:'Mockery'}, {type:'attack', value:7, desc:'Punctuation'} ] },
+    intents:[ {type:'attack', value:7, desc:'Mimic'}, {type:'attack', value:4, debuff:{key:'weak',value:2}, desc:'Mockery'}, {type:'attack', value:11, desc:'Punctuation'} ] },
 
-  // Tier 2
+  // Tier 2 — ~28-40 HP careless
   { id:'duelist',   name:'The Suit-Duelist', tier:2, hp:45, glyph:'⚔',
-    intents:[ {type:'attack', value:9, desc:'Riposte'}, {type:'attack', value:6, count:2, desc:'Twin thrust'}, {type:'block', value:8, desc:'Guard'}, {type:'buff', key:'strength', value:2, desc:'Set stance'} ] },
+    intents:[ {type:'attack', value:13, desc:'Riposte'}, {type:'attack', value:7, count:2, desc:'Twin thrust'}, {type:'attack', value:8, selfBlock:8, desc:'Parry-cut'}, {type:'attack', value:6, buff:{key:'strength',value:2}, desc:'Set stance'} ] },
   { id:'reflection',name:'The Reflection',  tier:2, hp:38, glyph:'⊠',
-    intents:[ {type:'attack', value:7, desc:'Refract'}, {type:'attack', value:5, count:2, desc:'Doubled strike'}, {type:'special', value:0, desc:'Mirror', special:'copy_block'} ] },
+    intents:[ {type:'attack', value:11, desc:'Refract'}, {type:'attack', value:7, count:2, desc:'Doubled strike'}, {type:'attack', value:6, special:'copy_block', desc:'Mirror'} ] },
   { id:'sleeper',   name:'The Sleeper',     tier:2, hp:52, glyph:'☾',
-    intents:[ {type:'attack', value:11, desc:'Dream-blade'}, {type:'debuff', key:'vulnerable', value:2, desc:'Lullaby'}, {type:'block', value:10, desc:'Coil'} ] },
+    intents:[ {type:'attack', value:16, desc:'Dream-blade'}, {type:'attack', value:8, debuff:{key:'vulnerable',value:2}, desc:'Lullaby'}, {type:'attack', value:9, selfBlock:10, desc:'Coil'} ] },
 
-  // Tier 3
+  // Tier 3 — ~45-60 HP careless
   { id:'gilded',    name:'The Gilded Idol', tier:3, hp:70, glyph:'⚜',
-    intents:[ {type:'attack', value:13, desc:'Golden fist'}, {type:'attack', value:7, count:2, desc:'Twin coronet'}, {type:'buff', key:'strength', value:3, desc:'Anoint'}, {type:'block', value:14, desc:'Shroud'} ] },
+    intents:[ {type:'attack', value:18, desc:'Golden fist'}, {type:'attack', value:9, count:2, desc:'Twin coronet'}, {type:'attack', value:10, buff:{key:'strength',value:3}, desc:'Anoint'}, {type:'attack', value:8, selfBlock:14, desc:'Shroud'} ] },
   { id:'archivist', name:'The Archivist',   tier:3, hp:62, glyph:'☱',
-    intents:[ {type:'attack', value:10, desc:'Citation'}, {type:'debuff', key:'weak', value:2, desc:'Quote'}, {type:'debuff', key:'vulnerable', value:2, desc:'Annotate'}, {type:'attack', value:16, desc:'Footnote'} ] },
+    intents:[ {type:'attack', value:14, desc:'Citation'}, {type:'attack', value:8, debuff:{key:'weak',value:2}, desc:'Quote'}, {type:'attack', value:9, debuff:{key:'vulnerable',value:2}, desc:'Annotate'}, {type:'attack', value:21, desc:'Footnote'} ] },
 
-  // Elites
+  // Elites — punishing
   { id:'twins',     name:'The Reversed Twins', tier:3, hp:78, glyph:'⚭', elite:true,
-    intents:[ {type:'attack', value:8, count:2, desc:'Twin strike'}, {type:'attack', value:14, desc:'Crowned blade'}, {type:'special', value:0, desc:'Curse', special:'add_curse'} ] },
+    intents:[ {type:'attack', value:10, count:2, desc:'Twin strike'}, {type:'attack', value:19, desc:'Crowned blade'}, {type:'attack', value:7, special:'add_curse', desc:'Cursed cut'} ] },
   { id:'oracle',    name:'The Bound Oracle',  tier:3, hp:88, glyph:'☋', elite:true,
-    intents:[ {type:'attack', value:18, desc:'Prophecy'}, {type:'debuff', key:'weak', value:3, desc:'Unsight'}, {type:'attack', value:10, desc:'Strangle'} ] },
+    intents:[ {type:'attack', value:23, desc:'Prophecy'}, {type:'attack', value:9, debuff:{key:'weak',value:3}, desc:'Unsight'}, {type:'attack', value:14, debuff:{key:'vulnerable',value:2}, desc:'Strangle'} ] },
 
-  // Boss
+  // Boss — a real wall, but every turn is read-able
   { id:'crown',     name:'The Crowned Fool', tier:4, hp:180, glyph:'☼', boss:true,
     intents:[
-      {type:'attack', value:14, desc:'Fool\'s blade'},
-      {type:'attack', value:8, count:2, desc:'Stutter'},
-      {type:'debuff', key:'vulnerable', value:2, desc:'Cast doubt'},
-      {type:'buff', key:'strength', value:4, desc:'Don the crown'},
-      {type:'attack', value:24, desc:'Coronation strike'},
+      {type:'attack', value:15, desc:'Fool\'s blade'},
+      {type:'attack', value:9, count:2, desc:'Stutter'},
+      {type:'attack', value:9, debuff:{key:'vulnerable',value:2}, desc:'Cast doubt'},
+      {type:'attack', value:11, buff:{key:'strength',value:3}, desc:'Don the crown'},
+      {type:'attack', value:22, desc:'Coronation strike'},
     ] },
 ];
 const ENEMY_BY_ID = {}; ENEMIES.forEach(e => ENEMY_BY_ID[e.id] = e);
@@ -1502,6 +1536,7 @@ function startCombat(enemyId){
     hangedManCost: 0,
     aspectsTriggeredThisTurn: {},
     cardsPlayedThisTurn: 0,
+    healedThisCombat: 0,
     firstAttackThisCombat: true,
     currentMajorCast: null,
     // pending choice modal (e.g. discard choice, lover choice)
@@ -1554,9 +1589,15 @@ function startCombat(enemyId){
 }
 
 function chooseEnemyIntent(enemyDef, enemy, rng){
-  // weighted random over intents
-  const choice = pickRand(enemyDef.intents, rng);
-  return choice;
+  // Random, but never the same intent twice in a row — keeps the telegraph
+  // meaningful and stops enemies stalling on one move.
+  const intents = enemyDef.intents;
+  if(intents.length <= 1) return intents[0];
+  let idx;
+  do { idx = Math.floor(rng() * intents.length); }
+  while(intents.length > 1 && idx === enemy.lastIntentIdx);
+  enemy.lastIntentIdx = idx;
+  return intents[idx];
 }
 
 function getCtx(){
@@ -1670,7 +1711,7 @@ function triggerAspect(suit){
     healPlayer(ctx, 6);
     text = 'ASPECT OF CUPS';
   } else if(suit === 'swords'){
-    applyBuff(ctx, 'pierce_next', 2);
+    applyDebuff(ctx, 'vulnerable', 2);
     text = 'ASPECT OF SWORDS';
   } else if(suit === 'pents'){
     gainBlock(ctx, 10);
@@ -1744,7 +1785,7 @@ function endTurn(){
 
 function decayStatus(map){
   // Most statuses decay 1 per turn except 'persistent' ones
-  const persistent = new Set(['strength','plate']);
+  const persistent = new Set(['strength','plate','ward']);
   Object.keys(map).forEach(k => {
     if(persistent.has(k)) return;
     map[k] = Math.max(0, map[k] - 1);
@@ -1752,42 +1793,70 @@ function decayStatus(map){
   });
 }
 
+// --- Enemy threat tuning knobs (sweep these, not the 30 table values) ---
+const ENEMY_DMG_MULT   = 0.62;  // 1.0 = raw intent table; global threat dial
+const ENEMY_FLOOR_SCALE = 0.25; // bonus damage per floor climbed
+
+// THE single source of truth for what one enemy hit lands for. Both combat
+// resolution and the on-screen telegraph call this, so the number shown is
+// always exactly the number that hits.
+function scaledEnemyHit(ctx, base){
+  let dmg = (base + Math.floor((state.run.floor||0) * ENEMY_FLOOR_SCALE)) * ENEMY_DMG_MULT;
+  if(ctx.enemy.debuffs && ctx.enemy.debuffs.strength) dmg += ctx.enemy.debuffs.strength;
+  if(ctx.enemy.debuffs && ctx.enemy.debuffs.weak) dmg *= 0.75;
+  return Math.max(0, Math.round(dmg));
+}
+
+// Apply incoming damage to the player: Block soaks first, then Ward
+// (a persistent shield from Cups), then HP.
+function damagePlayer(ctx, amount){
+  let dmg = amount;
+  const blocked = Math.min(ctx.player.block, dmg);
+  ctx.player.block -= blocked; dmg -= blocked;
+  if(dmg > 0 && ctx.player.buffs.ward){
+    const warded = Math.min(ctx.player.buffs.ward, dmg);
+    ctx.player.buffs.ward -= warded; dmg -= warded;
+    if(ctx.player.buffs.ward <= 0) delete ctx.player.buffs.ward;
+  }
+  if(dmg > 0){
+    ctx.player.hp = Math.max(0, ctx.player.hp - dmg);
+    if(ctx.player.hp === 0 && state.run.relics.includes('forgotten-name') && !ctx.combat.forgottenUsed){
+      ctx.combat.forgottenUsed = true;
+      ctx.player.hp = 10;
+    }
+  }
+}
+
 function resolveEnemyIntent(ctx){
   const intent = ctx.enemy.intent;
   if(!intent) return;
+
+  // Primary: damage (every modern intent is an attack)
   if(intent.type === 'attack'){
     const repeats = intent.count || 1;
-    for(let i=0;i<repeats;i++){
-      let dmg = intent.value;
-      // Forgotten Name relic: avoid death
-      // (handled in HP application)
-      let blocked = Math.min(ctx.player.block, dmg);
-      ctx.player.block -= blocked;
-      dmg -= blocked;
-      if(dmg > 0){
-        const before = ctx.player.hp;
-        ctx.player.hp = Math.max(0, ctx.player.hp - dmg);
-        if(ctx.player.hp === 0 && state.run.relics.includes('forgotten-name') && !ctx.combat.forgottenUsed){
-          ctx.combat.forgottenUsed = true;
-          ctx.player.hp = 10;
-        }
-      }
-    }
-  } else if(intent.type === 'block'){
+    for(let i=0;i<repeats;i++) damagePlayer(ctx, scaledEnemyHit(ctx, intent.value));
+  } else if(intent.type === 'block'){            // legacy standalone (unused by new data)
     ctx.enemy.block += intent.value;
-  } else if(intent.type === 'buff'){
-    ctx.enemy.debuffs[intent.key] = (ctx.enemy.debuffs[intent.key]||0) + intent.value;
-    // (some enemies have positive intent.key like 'strength' which is a "buff" — handled as debuffs map for code simplicity)
   } else if(intent.type === 'debuff'){
     ctx.player.debuffs[intent.key] = (ctx.player.debuffs[intent.key]||0) + intent.value;
-  } else if(intent.type === 'special'){
-    if(intent.special === 'copy_block'){
-      // Reflection: gains block equal to your block
-      ctx.enemy.block += Math.max(0, ctx.player.block);
-    } else if(intent.special === 'add_curse'){
-      // The Reversed Twins: add a curse card to discard
-      ctx.player.discard.push({ cardId:'major-13', reversed:true, ephemeral:false });
-    }
+  } else if(intent.type === 'buff'){
+    ctx.enemy.debuffs[intent.key] = (ctx.enemy.debuffs[intent.key]||0) + intent.value;
+  }
+
+  // Riders that hang off an attack so no turn is a free pass:
+  if(intent.debuff){
+    ctx.player.debuffs[intent.debuff.key] = (ctx.player.debuffs[intent.debuff.key]||0) + intent.debuff.value;
+  }
+  if(intent.buff){
+    ctx.enemy.debuffs[intent.buff.key] = (ctx.enemy.debuffs[intent.buff.key]||0) + intent.buff.value;
+  }
+  if(intent.selfBlock){
+    ctx.enemy.block += intent.selfBlock;
+  }
+  if(intent.special === 'copy_block'){
+    ctx.enemy.block += Math.max(0, ctx.player.block);
+  } else if(intent.special === 'add_curse'){
+    ctx.player.discard.push({ cardId:'major-13', reversed:true, ephemeral:false });
   }
 }
 
@@ -2227,19 +2296,40 @@ function renderCombat(){
   document.getElementById('enemy-hp-fill').style.width = (100 * ctx.enemy.hp / ctx.enemy.maxHp) + '%';
   const blockRow = document.getElementById('enemy-block-row');
   blockRow.innerHTML = ctx.enemy.block > 0 ? `<span class="enemy-block">⛨ ${ctx.enemy.block}</span>` : '';
-  // intent
+  // intent — a loud, TRUTHFUL telegraph (numbers shown == numbers that land)
   const intent = ctx.enemy.intent;
   const ie = document.getElementById('enemy-intent');
   if(intent){
-    let icon = '?';
-    let line = intent.desc;
-    if(intent.type === 'attack'){ icon='⚔'; line = `${intent.desc}: ${intent.value}${intent.count ? `×${intent.count}` : ''}`; }
-    else if(intent.type === 'block'){ icon='⛨'; line = `${intent.desc}: ${intent.value}`; }
-    else if(intent.type === 'buff'){ icon='⬆'; line = `${intent.desc}`; }
-    else if(intent.type === 'debuff'){ icon='⬇'; line = `${intent.desc}`; }
-    else if(intent.type === 'special'){ icon='✦'; line = intent.desc; }
-    ie.innerHTML = `<span class="intent-icon">${icon}</span> ${line}`;
-  } else { ie.textContent = '—'; }
+    const RIDER = {
+      weak:'they Weaken you', vulnerable:'they make you Vulnerable',
+      frail:'they make you Frail', burn:'they set you Alight'
+    };
+    let cls = 'intent-card', head = '', sub = [];
+    if(intent.type === 'attack'){
+      const hit = scaledEnemyHit(ctx, intent.value); // same fn combat uses → never lies
+      const hits = intent.count || 1;
+      const total = hit * hits;
+      const soak = ctx.player.block + (ctx.player.buffs.ward || 0);
+      const lethal = total >= ctx.player.hp + soak;
+      cls += lethal ? ' intent-lethal' : (total > soak ? ' intent-danger' : ' intent-safe');
+      head = `<span class="intent-icon">⚔</span><span class="intent-dmg">${hit}${hits>1?`<span class="intent-x">×${hits}</span>`:''}</span>`;
+      sub.push(`<b>${intent.desc}</b>`);
+      sub.push(total > soak
+        ? `<span class="intent-warn">${total} incoming · you stop ${soak}</span>`
+        : `<span class="intent-ok">${total} incoming · fully blocked</span>`);
+    } else {
+      cls += ' intent-safe';
+      head = `<span class="intent-icon">✦</span>`;
+      sub.push(`<b>${intent.desc}</b>`);
+    }
+    if(intent.debuff) sub.push(`+ ${RIDER[intent.debuff.key] || intent.debuff.key} ${intent.debuff.value}`);
+    if(intent.buff) sub.push(`+ they gain ${formatStatusName(intent.buff.key)} ${intent.buff.value}`);
+    if(intent.selfBlock) sub.push(`+ they Guard ${intent.selfBlock}`);
+    if(intent.special === 'copy_block') sub.push(`+ they mirror your Block`);
+    if(intent.special === 'add_curse') sub.push(`+ a curse enters your deck`);
+    ie.className = 'enemy-intent ' + cls;
+    ie.innerHTML = `<div class="intent-head">${head}</div><div class="intent-sub">${sub.join(' · ')}</div>`;
+  } else { ie.className = 'enemy-intent'; ie.textContent = '—'; }
 
   // player status pips
   const ps = document.getElementById('player-status');
@@ -2278,7 +2368,7 @@ function renderCombat(){
 }
 
 function formatStatusName(k){
-  return { strength:'Str', plate:'Plate', resolve:'Resolve', ward:'Ward', weak:'Weak', vulnerable:'Vuln', burn:'Burn', frail:'Frail', pierce_next:'Pierce' }[k] || k;
+  return { strength:'Str', plate:'Plate', resolve:'Resolve', ward:'Ward', weak:'Weak', vulnerable:'Vuln', burn:'Ember', frail:'Frail', pierce_next:'Pierce' }[k] || k;
 }
 
 function renderReadingStrip(){
