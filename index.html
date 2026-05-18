@@ -788,6 +788,7 @@ body::after{
     <div class="title-actions">
       <button class="btn primary" id="btn-new-run">Begin the Reading</button>
       <button class="btn" id="btn-continue-run" style="display:none">Continue Reading</button>
+      <button class="btn" id="btn-mirror">The Mirror</button>
       <button class="btn" id="btn-codex">The Library</button>
       <button class="btn tiny" id="btn-daily">Today's Spread</button>
     </div>
@@ -1452,6 +1453,22 @@ const VEILS = [
   { name:'Veil V',     desc:'Harsher still. Enemies +20% HP, hit +20%.',      mods:{ enemyHp:1.20, restHeal:0.30, enemyDmg:1.20, maxHp:54 } },
 ];
 
+/* ============ THE MIRROR — spend Insight on permanent talents ============
+   Modest, run-spanning upgrades. Costs escalate per rank. Kept small on
+   purpose: felt steady progress, never trivializing the climb. */
+const MIRROR_TALENTS = {
+  vigor:    { name:'Vigor',          glyph:'♥', max:4, costs:[60,110,180,280],
+              desc:r=>`+${5*r} max HP (next rank: +5).` },
+  fortune:  { name:"Fortune's Favor", glyph:'⛀', max:3, costs:[50,100,170],
+              desc:r=>`Start each run with +${15*r} gold (next: +15).` },
+  deepWard: { name:'Deep Reading',   glyph:'☽', max:3, costs:[80,150,240],
+              desc:r=>`Begin every combat with +${2*r} Ward (next: +2).` },
+};
+function mirrorRank(id){ return (state.meta.mirror && state.meta.mirror[id]) || 0; }
+function mirrorBonusMaxHp(){ return 5 * mirrorRank('vigor'); }
+function mirrorBonusGold(){ return 15 * mirrorRank('fortune'); }
+function mirrorBonusWard(){ return 2 * mirrorRank('deepWard'); }
+
 /* ============ PATRONS — who takes you as their Querent ============
    Each Patron is a character: a suit-leaning 16-card starter deck and a
    signature relic. This is the "build your character out" entry point —
@@ -1528,8 +1545,8 @@ function freshRun(seedStr, patronId){
     patron: patron.id,
     spread: [],          // claimed Arcana boon ids (persistent run passives)
     floor: 0,
-    hp: 60, maxHp: 60,
-    gold: 0,
+    hp: 60 + mirrorBonusMaxHp(), maxHp: 60 + mirrorBonusMaxHp(),
+    gold: mirrorBonusGold(),
     relics: [patron.relic],
     deck, // full owned deck (for reward display)
     path,
@@ -1632,6 +1649,8 @@ function startCombat(enemyId){
   if(run.relics.includes('fools-feather')) player.hand.push({ cardId:'major-0', reversed:false, ephemeral:true });
   // The Spread: persistent Arcana boons
   applyArcanaStart(player, run);
+  // The Mirror: Deep Reading talent
+  if(mirrorBonusWard() > 0) player.buffs.ward = (player.buffs.ward || 0) + mirrorBonusWard();
 
   const enemy = {
     hp: enemyDef.hp + Math.floor(run.floor * 1.2),
@@ -2795,6 +2814,35 @@ document.getElementById('btn-continue-run').onclick = () => {
     renderMap();
   }
 };
+function showMirror(){
+  const choices = Object.entries(MIRROR_TALENTS).map(([id, t]) => {
+    const rank = mirrorRank(id);
+    const maxed = rank >= t.max;
+    const cost = maxed ? null : t.costs[rank];
+    const afford = !maxed && state.meta.insight >= cost;
+    const status = maxed ? 'MAX' : (afford ? `cost ${cost} Insight` : `need ${cost} Insight`);
+    return {
+      icon: t.glyph,
+      label: `${t.name}  ·  rank ${rank}/${t.max}`,
+      note: `${t.desc(rank)}  —  ${status}`,
+      onClick: () => {
+        if(!maxed && afford){
+          state.meta.insight -= cost;
+          state.meta.mirror[id] = rank + 1;
+          saveState();
+        }
+        showMirror(); // refresh
+      }
+    };
+  });
+  choices.push({ icon:'❮', label:'Back to the title', onClick: () => { showScreen('title-screen'); refreshTitle(); } });
+  showModal({
+    title: 'The Mirror',
+    sub: `${state.meta.insight} Insight to spend. What it grants, it grants forever.`,
+    choices
+  });
+}
+document.getElementById('btn-mirror').onclick = () => { showMirror(); };
 document.getElementById('btn-codex').onclick = () => {
   renderCodex();
   showScreen('codex-screen');
