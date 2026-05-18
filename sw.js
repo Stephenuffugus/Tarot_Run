@@ -1,7 +1,7 @@
 /* Tarot Run — service worker
    Network-first for shell (so deploys propagate fast); cache-first for art assets.
 */
-const CACHE = 'tarot-run-v1';
+const CACHE = 'tarot-run-v2';
 const SHELL = [
   './',
   './index.html',

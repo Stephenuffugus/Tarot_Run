@@ -896,6 +896,7 @@ body::after{
    ========================================================================= */
 
 const VERSION = 1;
+const BUILD = 'B7 · meta+patrons+spread';  // visible on title; read it back to confirm you're current
 const SAVE_KEY = 'tarot-run-v1';
 
 /* ----- SEEDABLE RNG ----- */
@@ -2777,7 +2778,7 @@ function refreshTitle(){
     document.getElementById('btn-new-run').textContent = 'Begin the Reading';
   }
   const discovered = Object.keys(meta.discoveredCards||{}).length;
-  m.textContent = `${discovered}/78 cards inscribed · ${meta.runsCompleted||0} crowns · ${meta.insight||0} Insight`;
+  m.textContent = `${discovered}/78 cards · ${meta.runsCompleted||0} crowns · ${meta.insight||0} Insight · ${BUILD}`;
 }
 
 /* =====================================================================
