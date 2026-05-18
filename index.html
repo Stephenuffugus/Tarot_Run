@@ -1436,31 +1436,55 @@ const state = {
   run: null,
 };
 
-function freshRun(seedStr){
+/* ============ PATRONS — who takes you as their Querent ============
+   Each Patron is a character: a suit-leaning 16-card starter deck and a
+   signature relic. This is the "build your character out" entry point —
+   the run feels different from the first hand. */
+const PATRONS = {
+  magician: { id:'magician', name:'The Magician', glyph:'☿', primary:'wands',
+    relic:'querents-coin',
+    tagline:'Tempo & fire. +1 energy on turn 1. Wands-heavy — end fights before they begin.' },
+  priestess:{ id:'priestess', name:'The High Priestess', glyph:'☽', primary:'swords',
+    relic:'crooked-lens',
+    tagline:'Control & foresight. See the enemy\'s intent further ahead. Swords — debuff and dismantle.' },
+  empress:  { id:'empress', name:'The Empress', glyph:'♀', primary:'cups',
+    relic:'thurible',
+    tagline:'Sustain & bloom. Heal 2 every turn. Cups — outlast anything, win the long fight.' },
+  emperor:  { id:'emperor', name:'The Emperor', glyph:'♂', primary:'pents',
+    relic:'wax-mask',
+    tagline:'Defense & dominion. Start each combat with 6 Block. Pentacles — a wall that punches back.' },
+};
+
+// Recipe: 9 of the primary suit (low curve) + 2 of each other suit + The Fool = 16.
+function buildPatronDeck(primary){
+  const suits = ['wands','cups','swords','pents'];
+  const deck = [];
+  [1,1,2,2,3,3,4,4,5].forEach(n => deck.push({ cardId:`${primary}-${n}`, reversed:false }));
+  suits.filter(s => s !== primary).forEach(s => {
+    [1,2].forEach(n => deck.push({ cardId:`${s}-${n}`, reversed:false }));
+  });
+  deck.push({ cardId:'major-0', reversed:false }); // The Fool
+  return deck;
+}
+
+function freshRun(seedStr, patronId){
   const seed = strHash(seedStr || ('run-' + Date.now()));
   const rng = mulberry32(seed);
 
   // Generate path: 15 floors with branching encounters
   const path = generatePath(rng);
 
-  // Starter deck: 3 of each suit Ace/2/3 + 1 minor extra + 1 Fool
-  const deck = [];
-  ['wands','cups','swords','pents'].forEach(suit => {
-    for(let n=1;n<=3;n++){ deck.push({ cardId: `${suit}-${n}`, reversed:false }); }
-  });
-  // 4 more starters: another Ace of Wands, Ace of Cups, Ace of Pentacles, plus The Fool
-  deck.push({ cardId:'wands-1', reversed:false });
-  deck.push({ cardId:'cups-1',  reversed:false });
-  deck.push({ cardId:'pents-1', reversed:false });
-  deck.push({ cardId:'major-0', reversed:false });
+  const patron = PATRONS[patronId] || PATRONS.magician;
+  const deck = buildPatronDeck(patron.primary);
   shuffleInPlace(deck, rng);
 
   return {
     seed: seedStr, rngSeed: seed,
+    patron: patron.id,
     floor: 0,
     hp: 60, maxHp: 60,
     gold: 0,
-    relics: ['querents-coin'],  // starting relic
+    relics: [patron.relic],
     deck, // full owned deck (for reward display)
     path,
     currentNode: null,
@@ -2640,12 +2664,25 @@ function refreshTitle(){
    14. BOOTSTRAP
    ===================================================================== */
 
-document.getElementById('btn-new-run').onclick = () => {
-  if(state.run && !confirm('Begin a new reading? Your current run will end.')) return;
-  state.run = freshRun();
+function startRun(patronId, seed){
+  state.run = freshRun(seed, patronId);
   saveState();
   showScreen('map-screen');
   renderMap();
+}
+function choosePatron(){
+  showModal({
+    title: 'Who reads you?',
+    sub: 'Choose your Patron. They set your hand, your gift, and your road.',
+    choices: Object.values(PATRONS).map(p => ({
+      icon: p.glyph, label: p.name, note: p.tagline,
+      onClick: () => startRun(p.id)
+    }))
+  });
+}
+document.getElementById('btn-new-run').onclick = () => {
+  if(state.run && !confirm('Begin a new reading? Your current run will end.')) return;
+  choosePatron();
 };
 document.getElementById('btn-continue-run').onclick = () => {
   if(!state.run) return;
