@@ -558,6 +558,14 @@ body::after{
   box-shadow: 0 0 6px rgba(212,165,116,0.6);
   z-index:2;
 }
+/* Cost inflated by the Chain tax — make the decision visible */
+.card-cost.cost-taxed{
+  background: radial-gradient(circle at 30% 30%, #ffd27a, #e8682f 62%, #7a1f12);
+  color:#fff; border-color:#ff8a4a;
+  box-shadow: 0 0 9px rgba(232,104,47,0.85);
+  animation: taxPulse 1.2s ease-in-out infinite;
+}
+@keyframes taxPulse{ 0%,100%{ box-shadow:0 0 6px rgba(232,104,47,0.6);} 50%{ box-shadow:0 0 12px 2px rgba(232,104,47,0.95);} }
 .card-art{
   width: 100%; height: 56px;
   background: linear-gradient(160deg, var(--velvet), var(--bg-stage-deep));
@@ -896,7 +904,7 @@ body::after{
    ========================================================================= */
 
 const VERSION = 1;
-const BUILD = 'B8 · THE CHAIN';  // visible on title; read it back to confirm you're current
+const BUILD = 'B9 · CHAIN TEETH';  // visible on title; read it back to confirm you're current
 const SAVE_KEY = 'tarot-run-v1';
 
 /* ----- SEEDABLE RNG ----- */
@@ -1705,7 +1713,17 @@ function playCard(handIdx){
   const card = CARD_BY_ID[handEntry.cardId];
   if(!card) return;
 
-  let effectiveCost = card.cost + (ctx.combat.turnCostMod||0);
+  // THE CHAIN — consecutive same-suit minor cards build an escalating
+  // combo. Off-suit (or a gap) breaks it. Majors are wild: they neither
+  // build nor break the chain. Pushing the chain costs escalating energy
+  // (the "chain tax"), so a big combo is a real investment you must
+  // afford and set up — not a free hand-dump.
+  const MINOR = card.suit === 'wands' || card.suit === 'cups' || card.suit === 'swords' || card.suit === 'pents';
+  const prospectiveChain = !MINOR ? 0
+    : (ctx.combat.chainSuit === card.suit ? ctx.combat.chainCount + 1 : 1);
+  const chainTax = MINOR ? chainTaxFor(prospectiveChain) : 0;
+
+  let effectiveCost = card.cost + (ctx.combat.turnCostMod||0) + chainTax;
   // Ribbon of Fate: first card costs 0
   if(state.run.relics.includes('ribbon-of-fate') && ctx.combat.cardsPlayedThisTurn === 0) effectiveCost = 0;
   // Ace of Aces: aces cost 0
@@ -1725,14 +1743,10 @@ function playCard(handIdx){
   ctx.player.energy -= effectiveCost;
   ctx.combat.cardsPlayedThisTurn += 1;
 
-  // THE CHAIN — consecutive same-suit minor cards build an escalating
-  // combo. Off-suit (or a gap) breaks it. Majors are wild: they neither
-  // build nor break the chain. This makes deck focus + sequencing the
-  // game, and makes scattershot "play everything" a weak line.
-  const MINOR = card.suit === 'wands' || card.suit === 'cups' || card.suit === 'swords' || card.suit === 'pents';
+  // Commit the chain (only now that the card is actually played)
   if(MINOR){
-    if(ctx.combat.chainSuit === card.suit){ ctx.combat.chainCount += 1; }
-    else { ctx.combat.chainSuit = card.suit; ctx.combat.chainCount = 1; }
+    ctx.combat.chainSuit = card.suit;
+    ctx.combat.chainCount = prospectiveChain;
   }
   ctx.chainBonus = MINOR ? chainBonusFor(ctx.combat.chainCount) : 0;
 
@@ -1846,6 +1860,15 @@ function triggerAspect(suit){
 function chainBonusFor(count){
   if(count <= 1) return 0;
   return Math.min(8, (count - 1) * 2);   // 2 → +2, 3 → +4, 4 → +6, 5+ → +8
+}
+// The Chain TAX — extra energy to extend a chain. First CHAIN_TAX_FREE
+// cards are free (basic 2-combo costs nothing); pushing a BIG chain is
+// the real investment decision. Capped so it bites but never bricks you.
+// Single source of truth: both playCard and renderHand call this.
+const CHAIN_TAX_FREE = 2;
+const CHAIN_TAX_CAP  = 3;
+function chainTaxFor(prospectiveChain){
+  return Math.max(0, Math.min(CHAIN_TAX_CAP, prospectiveChain - CHAIN_TAX_FREE));
 }
 const SUIT_LABEL = { wands:'WANDS', cups:'CUPS', swords:'SWORDS', pents:'PENTACLES' };
 function showChainBanner(suit, count, bonus){
@@ -2416,11 +2439,17 @@ function renderHand(){
   ctx.player.hand.forEach((entry, idx) => {
     const card = CARD_BY_ID[entry.cardId];
     const el = renderCardElement(card, { reversed: entry.reversed });
-    let effectiveCost = card.cost + (ctx.combat.turnCostMod||0);
+    // Mirror playCard's chain tax so the rising cost is VISIBLE pre-play.
+    const isMinor = card.suit==='wands'||card.suit==='cups'||card.suit==='swords'||card.suit==='pents';
+    const prospect = !isMinor ? 0 : (ctx.combat.chainSuit === card.suit ? ctx.combat.chainCount + 1 : 1);
+    const chainTax = isMinor ? chainTaxFor(prospect) : 0;
+    let effectiveCost = card.cost + (ctx.combat.turnCostMod||0) + chainTax;
     if(state.run.relics.includes('ribbon-of-fate') && ctx.combat.cardsPlayedThisTurn === 0) effectiveCost = 0;
     if(state.run.relics.includes('ace-of-aces') && card.arcanaNum === 1 && card.suit !== 'major') effectiveCost = 0;
     effectiveCost = Math.max(0, effectiveCost);
-    el.querySelector('.card-cost').textContent = effectiveCost;
+    const costEl = el.querySelector('.card-cost');
+    costEl.textContent = effectiveCost;
+    if(chainTax > 0 && effectiveCost > 0){ costEl.classList.add('cost-taxed'); costEl.title = `+${chainTax} chain tax`; }
     const playable = ctx.player.energy >= effectiveCost && !(card.suit === 'major' && ctx.combat.currentMajorCast);
     el.classList.add(playable ? 'playable' : 'unplayable');
     el.onclick = () => { if(playable) playCard(idx); };
