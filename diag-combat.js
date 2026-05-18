@@ -72,6 +72,9 @@ const sp = () => s.combatPlayer, se = () => s.combatEnemy;
 // inject a known card (Two of Wands = wands-2, Strike 5) — once plain, once studied
 function playInjected(studied){
   const e2 = se().hp;
+  // Reset The Chain so each measurement is first-in-chain (chain bonus 0),
+  // isolating the +2 Study delta from the (separate) Chain mechanic.
+  s.combat.chainSuit = null; s.combat.chainCount = 0;
   sp().hand.unshift({ cardId:'wands-2', reversed:false, studied });
   sp().energy = 5;
   game.playCard(0);
@@ -90,3 +93,18 @@ game.startCombat(fr.path[0].nodes[0].enemyId);
 const fb = fr.combatPlayer.block, fs2 = (fr.combatPlayer.buffs.strength||0);
 console.log(`  start block=${fb} (expect >=12)  strength=${fs2} (expect >=2)`);
 console.log('  RESULT:', (fb>=12 && fs2>=2) ? 'PASS — Spread boons applied at combat start' : 'FAIL');
+
+console.log('\n--- TEST G: The Chain escalates on same suit, resets on off-suit ---');
+const gr = game.freshRun('chain-seed', 'magician'); game.state.run = gr;
+gr.floor = 0; gr.path[0].chosenNode = 0; gr.currentNode = gr.path[0].nodes[0];
+game.startCombat(gr.path[0].nodes[0].enemyId);
+const gp=()=>gr.combatPlayer, ge=()=>gr.combatEnemy;
+ge().hp = 999; ge().maxHp = 999; // dummy so the sequence isn't cut short by a kill
+function gplay(cardId){ gp().hand.unshift({cardId,reversed:false}); gp().energy=9; const h=ge().hp; game.playCard(0); return h-ge().hp; }
+// Stop at chain 2 so the chain-of-3 Aspect never fires and confounds it.
+const a=gplay('wands-2');   // chain1 -> +0 -> 5
+const b=gplay('wands-2');   // chain2 -> +2 -> 7
+const off=gplay('swords-2');// off-suit: chain resets to swords1 -> pierce 3
+const d=gplay('wands-2');   // wands chain reset to 1 -> +0 -> 5
+console.log(`  Wands chain: ${a}, ${b} (expect 5,7); off-suit Swords ${off} (expect 3); Wands after reset ${d} (expect 5)`);
+console.log('  RESULT:', (a===5&&b===7&&off===3&&d===5) ? 'PASS — Chain escalates +2/step and resets on suit change' : 'FAIL');

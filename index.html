@@ -896,7 +896,7 @@ body::after{
    ========================================================================= */
 
 const VERSION = 1;
-const BUILD = 'B7 · meta+patrons+spread';  // visible on title; read it back to confirm you're current
+const BUILD = 'B8 · THE CHAIN';  // visible on title; read it back to confirm you're current
 const SAVE_KEY = 'tarot-run-v1';
 
 /* ----- SEEDABLE RNG ----- */
@@ -1280,7 +1280,7 @@ function combine(...results){
 
 function dealDamage(ctx, raw){
   // applies study bonus, player strength, enemy vulnerable, enemy block
-  let dmg = raw + (ctx.studyBonus || 0);
+  let dmg = raw + (ctx.studyBonus || 0) + (ctx.chainBonus || 0);
   if(ctx.player.buffs.strength) dmg += ctx.player.buffs.strength;
   if(ctx.enemy.debuffs.vulnerable) dmg = Math.floor(dmg * 1.5);
   if(ctx.player.debuffs.weak) dmg = Math.floor(dmg * 0.75);
@@ -1295,7 +1295,7 @@ function dealDamage(ctx, raw){
 }
 function dealPierce(ctx, raw){
   // ignores enemy block
-  let dmg = raw + (ctx.studyBonus || 0);
+  let dmg = raw + (ctx.studyBonus || 0) + (ctx.chainBonus || 0);
   if(ctx.player.buffs.strength) dmg += ctx.player.buffs.strength;
   if(ctx.enemy.debuffs.vulnerable) dmg = Math.floor(dmg * 1.5);
   if(ctx.player.debuffs.weak) dmg = Math.floor(dmg * 0.75);
@@ -1303,7 +1303,7 @@ function dealPierce(ctx, raw){
   return { pierce: dmg };
 }
 function gainBlock(ctx, raw){
-  let blk = raw + (ctx.studyBonus || 0);
+  let blk = raw + (ctx.studyBonus || 0) + (ctx.chainBonus || 0);
   if(ctx.player.buffs.plate) blk += ctx.player.buffs.plate * 2;
   if(ctx.player.debuffs.frail) blk = Math.floor(blk * 0.75);
   ctx.player.block += blk;
@@ -1311,7 +1311,7 @@ function gainBlock(ctx, raw){
 }
 function healPlayer(ctx, raw){
   const before = ctx.player.hp;
-  ctx.player.hp = Math.min(ctx.player.maxHp, ctx.player.hp + raw + (ctx.studyBonus || 0));
+  ctx.player.hp = Math.min(ctx.player.maxHp, ctx.player.hp + raw + (ctx.studyBonus || 0) + (ctx.chainBonus || 0));
   const healed = ctx.player.hp - before;
   if(ctx.combat) ctx.combat.healedThisCombat = (ctx.combat.healedThisCombat || 0) + healed;
   return { healing: healed };
@@ -1625,6 +1625,8 @@ function startCombat(enemyId){
     aspectsTriggeredThisTurn: {},
     cardsPlayedThisTurn: 0,
     healedThisCombat: 0,
+    chainSuit: null,         // The Chain: consecutive same-suit combo this turn
+    chainCount: 0,
     firstAttackThisCombat: true,
     currentMajorCast: null,
     // pending choice modal (e.g. discard choice, lover choice)
@@ -1723,13 +1725,31 @@ function playCard(handIdx){
   ctx.player.energy -= effectiveCost;
   ctx.combat.cardsPlayedThisTurn += 1;
 
+  // THE CHAIN — consecutive same-suit minor cards build an escalating
+  // combo. Off-suit (or a gap) breaks it. Majors are wild: they neither
+  // build nor break the chain. This makes deck focus + sequencing the
+  // game, and makes scattershot "play everything" a weak line.
+  const MINOR = card.suit === 'wands' || card.suit === 'cups' || card.suit === 'swords' || card.suit === 'pents';
+  if(MINOR){
+    if(ctx.combat.chainSuit === card.suit){ ctx.combat.chainCount += 1; }
+    else { ctx.combat.chainSuit = card.suit; ctx.combat.chainCount = 1; }
+  }
+  ctx.chainBonus = MINOR ? chainBonusFor(ctx.combat.chainCount) : 0;
+
   // Run the card's play function (potentially reversed).
-  // Studied cards get +2 to every numeric effect (Strike/Pierce/Block/Heal).
+  // Studied cards get +2; the Chain bonus rides on top of every effect.
   ctx.studyBonus = handEntry.studied ? 2 : 0;
   const result = handEntry.reversed && card.reversedPlay
     ? card.reversedPlay(ctx)
     : card.play(ctx);
   ctx.studyBonus = 0;
+  ctx.chainBonus = 0;
+
+  // Loud, legible feedback so the combo is *felt*. Chain 3 is the
+  // Aspect moment — let triggerAspect own the banner there.
+  if(MINOR && ctx.combat.chainCount >= 2 && ctx.combat.chainCount !== 3){
+    showChainBanner(card.suit, ctx.combat.chainCount, chainBonusFor(ctx.combat.chainCount));
+  }
 
   // Track card discovery
   state.meta.discoveredCards[card.id] = state.meta.discoveredCards[card.id] || { name: card.name, seen: 0, played: 0 };
@@ -1740,10 +1760,10 @@ function playCard(handIdx){
     ctx.player.discard.push(handEntry);
   }
 
-  // Aspect Resonance: 3+ same-suit plays in a turn trigger an aspect
-  ctx.combat.aspectsTriggeredThisTurn[card.suit] = (ctx.combat.aspectsTriggeredThisTurn[card.suit]||0) + 1;
-  const aspectCt = ctx.combat.aspectsTriggeredThisTurn[card.suit];
-  if(aspectCt === 3){
+  // The Chain IS the suit mechanic now (no separate Aspect Resonance):
+  // a chain of exactly 3 detonates the suit's Aspect as a loud capstone,
+  // on top of the smooth +2/step. One legible mechanic, one payoff moment.
+  if(MINOR && ctx.combat.chainCount === 3){
     triggerAspect(card.suit);
   }
 
@@ -1820,6 +1840,22 @@ function triggerAspect(suit){
   banner.classList.add('show');
 }
 
+// The Chain bonus curve: the Nth same-suit card in a row adds this to
+// every Strike/Pierce/Block/Heal it does. Escalates hard so a focused,
+// well-sequenced deck massively out-performs scattershot play.
+function chainBonusFor(count){
+  if(count <= 1) return 0;
+  return Math.min(8, (count - 1) * 2);   // 2 → +2, 3 → +4, 4 → +6, 5+ → +8
+}
+const SUIT_LABEL = { wands:'WANDS', cups:'CUPS', swords:'SWORDS', pents:'PENTACLES' };
+function showChainBanner(suit, count, bonus){
+  const banner = document.getElementById('aspect-banner');
+  if(!banner) return;
+  banner.textContent = `${SUIT_LABEL[suit]||''} CHAIN ×${count}  +${bonus}`;
+  banner.classList.remove('show'); void banner.offsetWidth;
+  banner.classList.add('show');
+}
+
 function endTurn(){
   const ctx = getCtx();
   // Resolve enemy intent
@@ -1848,6 +1884,8 @@ function endTurn(){
   ctx.player.block = 0;
   ctx.enemy.block = 0;
   ctx.combat.cardsPlayedThisTurn = 0;
+  ctx.combat.chainSuit = null;
+  ctx.combat.chainCount = 0;
   ctx.combat.turnCostMod = 0;
   ctx.combat.aspectsTriggeredThisTurn = {};
   ctx.combat.chaliceUsedThisTurn = false;
