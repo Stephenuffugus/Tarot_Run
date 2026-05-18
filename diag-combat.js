@@ -62,3 +62,22 @@ const wexp = game.scaledEnemyHit(wctx, 6);
 game.resolveEnemyIntent(wctx);
 console.log('  ward 10, hit ' + wexp + ' -> hp ' + wctx.player.hp + ' ward ' + (wctx.player.buffs.ward||0) +
   ':', (wctx.player.hp===50 && wctx.player.buffs.ward===10-wexp) ? 'PASS — ward soaked it, hp intact' : 'FAIL');
+
+console.log('\n--- TEST E: a Studied card deals +2 ---');
+// fresh combat, find a basic Wands strike in hand or force one
+const s = game.freshRun('study-seed'); game.state.run = s;
+s.floor = 0; s.path[0].chosenNode = 0; s.currentNode = s.path[0].nodes[0];
+game.startCombat(s.path[0].nodes[0].enemyId);
+const sp = () => s.combatPlayer, se = () => s.combatEnemy;
+// inject a known card (Two of Wands = wands-2, Strike 5) — once plain, once studied
+function playInjected(studied){
+  const e2 = se().hp;
+  sp().hand.unshift({ cardId:'wands-2', reversed:false, studied });
+  sp().energy = 5;
+  game.playCard(0);
+  return e2 - se().hp;
+}
+const plain = playInjected(false);
+const study = playInjected(true);
+console.log(`  Two of Wands plain=${plain}  studied=${study}  (expect studied = plain+2)`);
+console.log('  RESULT:', study === plain + 2 ? 'PASS — Study adds +2' : 'FAIL — Study not applied');

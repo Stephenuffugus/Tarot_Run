@@ -1277,8 +1277,8 @@ function combine(...results){
 }
 
 function dealDamage(ctx, raw){
-  // applies player strength, enemy vulnerable, enemy block
-  let dmg = raw;
+  // applies study bonus, player strength, enemy vulnerable, enemy block
+  let dmg = raw + (ctx.studyBonus || 0);
   if(ctx.player.buffs.strength) dmg += ctx.player.buffs.strength;
   if(ctx.enemy.debuffs.vulnerable) dmg = Math.floor(dmg * 1.5);
   if(ctx.player.debuffs.weak) dmg = Math.floor(dmg * 0.75);
@@ -1293,7 +1293,7 @@ function dealDamage(ctx, raw){
 }
 function dealPierce(ctx, raw){
   // ignores enemy block
-  let dmg = raw;
+  let dmg = raw + (ctx.studyBonus || 0);
   if(ctx.player.buffs.strength) dmg += ctx.player.buffs.strength;
   if(ctx.enemy.debuffs.vulnerable) dmg = Math.floor(dmg * 1.5);
   if(ctx.player.debuffs.weak) dmg = Math.floor(dmg * 0.75);
@@ -1301,7 +1301,7 @@ function dealPierce(ctx, raw){
   return { pierce: dmg };
 }
 function gainBlock(ctx, raw){
-  let blk = raw;
+  let blk = raw + (ctx.studyBonus || 0);
   if(ctx.player.buffs.plate) blk += ctx.player.buffs.plate * 2;
   if(ctx.player.debuffs.frail) blk = Math.floor(blk * 0.75);
   ctx.player.block += blk;
@@ -1309,7 +1309,7 @@ function gainBlock(ctx, raw){
 }
 function healPlayer(ctx, raw){
   const before = ctx.player.hp;
-  ctx.player.hp = Math.min(ctx.player.maxHp, ctx.player.hp + raw);
+  ctx.player.hp = Math.min(ctx.player.maxHp, ctx.player.hp + raw + (ctx.studyBonus || 0));
   const healed = ctx.player.hp - before;
   if(ctx.combat) ctx.combat.healedThisCombat = (ctx.combat.healedThisCombat || 0) + healed;
   return { healing: healed };
@@ -1522,7 +1522,7 @@ function startCombat(enemyId){
   const reading = majorPool.slice(0, 3);
 
   // Build draw pile from owned deck
-  const drawPile = run.deck.map(c => ({ cardId: c.cardId, reversed:false }));
+  const drawPile = run.deck.map(c => ({ cardId: c.cardId, reversed:false, studied: !!c.studied }));
   shuffleInPlace(drawPile, rng);
 
   const combat = {
@@ -1631,10 +1631,13 @@ function playCard(handIdx){
   ctx.player.energy -= effectiveCost;
   ctx.combat.cardsPlayedThisTurn += 1;
 
-  // Run the card's play function (potentially reversed)
+  // Run the card's play function (potentially reversed).
+  // Studied cards get +2 to every numeric effect (Strike/Pierce/Block/Heal).
+  ctx.studyBonus = handEntry.studied ? 2 : 0;
   const result = handEntry.reversed && card.reversedPlay
     ? card.reversedPlay(ctx)
     : card.play(ctx);
+  ctx.studyBonus = 0;
 
   // Track card discovery
   state.meta.discoveredCards[card.id] = state.meta.discoveredCards[card.id] || { name: card.name, seen: 0, played: 0 };
@@ -2043,8 +2046,10 @@ function showRestModal(){
     choices: [
       { icon:'♥', label:`Rest`, note:`Heal ${Math.min(25, Math.floor(state.run.maxHp * 0.4))} HP.`,
         onClick: () => { state.run.hp = Math.min(state.run.maxHp, state.run.hp + Math.floor(state.run.maxHp * 0.4)); advanceFloor(); } },
-      { icon:'✦', label:`Study a card`, note:`Permanently +1 effect to one card in your deck.`,
+      { icon:'✦', label:`Study a card`, note:`Permanently +2 to one card's Strike / Pierce / Block / Heal.`,
         onClick: () => { showStudyModal(); } },
+      { icon:'✎', label:`The Hermit's Bargain`, note:`Banish a card from your deck forever — thin the deck, sharpen your draws.`,
+        onClick: () => { showBanishModal(); } },
     ]
   });
 }
