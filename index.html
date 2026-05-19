@@ -634,6 +634,17 @@ body::after{
 }
 .card.reversed{ transform: rotate(180deg); }
 .card.reversed.selected{ transform: rotate(180deg) translateY(-18px); }
+/* B15 — fate-reversed in hand: readable (no flip), marked by a ribbon */
+.card.fate-rev{ filter: sepia(0.32) hue-rotate(-12deg) brightness(0.93); }
+.card.fate-rev .card-art{ filter: grayscale(0.28); }
+.fate-ribbon{
+  position:absolute; left:0; right:0; bottom:0;
+  background: linear-gradient(90deg, rgba(150,16,16,0.88), rgba(120,28,28,0.88));
+  color: var(--card-cream); font-family: var(--font-display);
+  font-size: 8px; letter-spacing: 0.12em; text-align:center; padding:2px 0;
+  border-bottom-left-radius:7px; border-bottom-right-radius:7px; pointer-events:none;
+}
+.card-cost.cost-fate{ box-shadow: 0 0 9px rgba(150,16,16,0.85); }
 .card-cost{
   position:absolute; top: 3px; left: 4px;
   width: 22px; height: 22px;
@@ -867,6 +878,14 @@ body::after{
 }
 .ci-channel:active{ transform: scale(0.96); }
 .ci-channel[disabled]{ background: var(--velvet); color: var(--card-cream-dim); cursor: default; }
+.ci-fate{
+  font-family: var(--font-display); letter-spacing: 0.12em; text-transform: uppercase;
+  font-size: 14px; padding: 12px 22px; border-radius: 6px; cursor: pointer;
+  background: var(--blood-bright); color: var(--card-cream); border: none;
+  transition: transform 90ms;
+}
+.ci-fate:active{ transform: scale(0.96); }
+.ci-fate[disabled]{ background: var(--velvet); color: var(--card-cream-dim); cursor: default; }
 
 /* small util */
 .spacer{ height: 8px; }
@@ -1000,7 +1019,7 @@ body::after{
    ========================================================================= */
 
 const VERSION = 1;
-const BUILD = 'B14 · THE STRIKE';  // visible on title; read it back to confirm you're current
+const BUILD = 'B15 · THE TURN OF FATE';  // visible on title; read it back to confirm you're current
 const SAVE_KEY = 'tarot-run-v1';
 
 /* ----- SEEDABLE RNG ----- */
@@ -1428,8 +1447,8 @@ function combine(...results){
 }
 
 function dealDamage(ctx, raw){
-  // applies study bonus, player strength, enemy vulnerable, enemy block
-  let dmg = raw + (ctx.studyBonus || 0) + (ctx.chainBonus || 0);
+  // fate (reversed) scales the card's own base; then study/chain/strength
+  let dmg = Math.round(raw * (ctx.fateMult || 1)) + (ctx.studyBonus || 0) + (ctx.chainBonus || 0);
   if(ctx.player.buffs.strength) dmg += ctx.player.buffs.strength;
   if(ctx.enemy.debuffs.vulnerable) dmg = Math.floor(dmg * 1.5);
   if(ctx.player.debuffs.weak) dmg = Math.floor(dmg * 0.75);
@@ -1443,8 +1462,8 @@ function dealDamage(ctx, raw){
   return { damage: dmg, blocked };
 }
 function dealPierce(ctx, raw){
-  // ignores enemy block
-  let dmg = raw + (ctx.studyBonus || 0) + (ctx.chainBonus || 0);
+  // ignores enemy block; fate (reversed) scales the card's own base
+  let dmg = Math.round(raw * (ctx.fateMult || 1)) + (ctx.studyBonus || 0) + (ctx.chainBonus || 0);
   if(ctx.player.buffs.strength) dmg += ctx.player.buffs.strength;
   if(ctx.enemy.debuffs.vulnerable) dmg = Math.floor(dmg * 1.5);
   if(ctx.player.debuffs.weak) dmg = Math.floor(dmg * 0.75);
@@ -1452,7 +1471,7 @@ function dealPierce(ctx, raw){
   return { pierce: dmg };
 }
 function gainBlock(ctx, raw){
-  let blk = raw + (ctx.studyBonus || 0) + (ctx.chainBonus || 0);
+  let blk = Math.round(raw * (ctx.fateMult || 1)) + (ctx.studyBonus || 0) + (ctx.chainBonus || 0);
   if(ctx.player.buffs.plate) blk += ctx.player.buffs.plate * 2;
   if(ctx.player.debuffs.frail) blk = Math.floor(blk * 0.75);
   ctx.player.block += blk;
@@ -1460,7 +1479,7 @@ function gainBlock(ctx, raw){
 }
 function healPlayer(ctx, raw){
   const before = ctx.player.hp;
-  ctx.player.hp = Math.min(ctx.player.maxHp, ctx.player.hp + raw + (ctx.studyBonus || 0) + (ctx.chainBonus || 0));
+  ctx.player.hp = Math.min(ctx.player.maxHp, ctx.player.hp + Math.round(raw * (ctx.fateMult || 1)) + (ctx.studyBonus || 0) + (ctx.chainBonus || 0));
   const healed = ctx.player.hp - before;
   if(ctx.combat) ctx.combat.healedThisCombat = (ctx.combat.healedThisCombat || 0) + healed;
   return { healing: healed };
@@ -1477,9 +1496,13 @@ function drawCards(ctx, n){
       shuffleInPlace(ctx.player.draw, ctx.combat.rng);
     }
     const c = ctx.player.draw.shift();
-    // reversed check
-    if(!c.reversed && CARD_BY_ID[c.cardId].reversedPlay && ctx.combat.rng() < 0.05){
-      c.reversed = true;
+    // THE TURN OF FATE — only Minors with a real cost can turn Reversed
+    // (a 0-cost card has no discount to trade, so fate leaves it be).
+    const cd = CARD_BY_ID[c.cardId];
+    const fateable = cd && c.cardId && (cd.suit==='wands'||cd.suit==='cups'||cd.suit==='swords'||cd.suit==='pents') && cd.cost >= 1;
+    if(!c.reversed && fateable){
+      const ch = fateChanceFor();
+      if(ch > 0 && ctx.combat.rng() < ch) c.reversed = true;
     }
     ctx.player.hand.push(c);
     drawn++;
@@ -1804,6 +1827,8 @@ function startCombat(enemyId){
     // dead. UI-only (channelCard); defaults here are inert for engine/tests.
     channeledThisTurn: false,
     channelFedCount: 0,
+    // The Turn of Fate — Priestess may turn one card's fate per turn.
+    fateTurnedThisTurn: false,
   };
 
   const player = {
@@ -1894,6 +1919,9 @@ function playCard(handIdx){
   // Ace of Aces: aces cost 0
   if(state.run.relics.includes('ace-of-aces') && card.arcanaNum === 1 && card.suit !== 'major') effectiveCost = 0;
   effectiveCost = Math.max(0, effectiveCost);
+  // THE TURN OF FATE — a Reversed Minor is cheaper but weaker
+  const fateReversed = MINOR && handEntry.reversed && !card.reversedPlay;
+  if(fateReversed) effectiveCost = Math.max(0, effectiveCost - 1);
 
   if(ctx.player.energy < effectiveCost){ flashUnplayable(handIdx); return; }
 
@@ -1918,11 +1946,15 @@ function playCard(handIdx){
   // Run the card's play function (potentially reversed).
   // Studied cards get +2; the Chain bonus rides on top of every effect.
   ctx.studyBonus = handEntry.studied ? 2 : 0;
+  if(fateReversed) ctx.fateMult = fateMultFor();
   const result = handEntry.reversed && card.reversedPlay
     ? card.reversedPlay(ctx)
     : card.play(ctx);
+  ctx.fateMult = 1;
   ctx.studyBonus = 0;
   ctx.chainBonus = 0;
+  // Empress turns fate's downside into her blessing
+  if(fateReversed && state.run.patron === 'empress') healPlayer(ctx, 3);
 
   // Loud, legible feedback so the combo is *felt*. Chain 3 is the
   // Aspect moment — let triggerAspect own the banner there.
@@ -2035,6 +2067,22 @@ const CHAIN_TAX_CAP  = 3;
 function chainTaxFor(prospectiveChain){
   return Math.max(0, Math.min(CHAIN_TAX_CAP, prospectiveChain - CHAIN_TAX_FREE));
 }
+
+/* THE TURN OF FATE — Minor cards may be drawn Reversed: a universal
+   twist (−1 cost, weaker effect). VISIBLE on draw, and each Patron bends
+   fate differently. Scoped to Minors so Major powers / pre-reversed
+   curse cards keep their own behavior. Upright = fateMult 1.0 → the
+   engine path is byte-identical for non-reversed cards (tests unaffected). */
+const FATE_BASE_CHANCE = 0.22;          // base reverse chance on draw
+const FATE_REVERSED_MULT = {            // how hard fate bites this Patron
+  magician:0.60, priestess:0.60, empress:0.60, emperor:0.80 };
+function fateMultFor(){ return FATE_REVERSED_MULT[ state.run && state.run.patron ] || 0.60; }
+function fateChanceFor(){
+  const pid = state.run && state.run.patron;
+  let ch = pid === 'magician' ? 0 : FATE_BASE_CHANCE;   // Magician forces Upright
+  if(state.run && state.run.relics && state.run.relics.includes('broken-mirror')) ch += 0.15;
+  return ch;
+}
 const SUIT_LABEL = { wands:'WANDS', cups:'CUPS', swords:'SWORDS', pents:'PENTACLES' };
 function showChainBanner(suit, count, bonus){
   const banner = document.getElementById('aspect-banner');
@@ -2075,6 +2123,27 @@ function channelCard(handIdx){
   renderCombat();
 }
 
+/* The Priestess bends fate: 1×/turn she may turn a Minor's fate
+   (Reverse it for the discount, or Right a bad Reversed). UI-only. */
+function turnFate(handIdx){
+  const ctx = getCtx();
+  if(!ctx || !ctx.combat || ctx.combat.fateTurnedThisTurn) return;
+  if(!state.run || state.run.patron !== 'priestess') return;
+  const entry = ctx.player.hand[handIdx];
+  if(!entry) return;
+  const card = CARD_BY_ID[entry.cardId];
+  const isMinor = card && (card.suit==='wands'||card.suit==='cups'||card.suit==='swords'||card.suit==='pents');
+  if(!isMinor) return;
+  entry.reversed = !entry.reversed;
+  ctx.combat.fateTurnedThisTurn = true;
+  const banner = document.getElementById('aspect-banner');
+  if(banner){ banner.textContent = entry.reversed ? 'FATE REVERSED' : 'FATE RIGHTED';
+    banner.classList.remove('show'); void banner.offsetWidth; banner.classList.add('show'); }
+  const ov = document.getElementById('card-inspect');
+  if(ov) ov.classList.remove('active');
+  renderCombat();
+}
+
 function endTurn(){
   const ctx = getCtx();
   // Resolve enemy intent
@@ -2109,6 +2178,7 @@ function endTurn(){
   ctx.combat.aspectsTriggeredThisTurn = {};
   ctx.combat.chaliceUsedThisTurn = false;
   ctx.combat.channeledThisTurn = false;
+  ctx.combat.fateTurnedThisTurn = false;
   ctx.combat.sealedLetterUsedThisCard = false;
 
   ctx.combat.turn += 1;
@@ -2643,18 +2713,27 @@ function renderHand(){
   const ctx = getCtx();
   ctx.player.hand.forEach((entry, idx) => {
     const card = CARD_BY_ID[entry.cardId];
-    const el = renderCardElement(card, { reversed: entry.reversed });
-    // Mirror playCard's chain tax so the rising cost is VISIBLE pre-play.
     const isMinor = card.suit==='wands'||card.suit==='cups'||card.suit==='swords'||card.suit==='pents';
+    const fateRev = isMinor && entry.reversed;
+    // Hand stays READABLE (no 180° flip here) — fate is shown as a ribbon.
+    const el = renderCardElement(card, { reversed: false });
+    if(fateRev){
+      el.classList.add('fate-rev');
+      const rib = document.createElement('div'); rib.className = 'fate-ribbon'; rib.textContent = '↻ REVERSED';
+      el.appendChild(rib);
+    }
+    // Mirror playCard's chain tax so the rising cost is VISIBLE pre-play.
     const prospect = !isMinor ? 0 : (ctx.combat.chainSuit === card.suit ? ctx.combat.chainCount + 1 : 1);
     const chainTax = isMinor ? chainTaxFor(prospect) : 0;
     let effectiveCost = card.cost + (ctx.combat.turnCostMod||0) + chainTax;
     if(state.run.relics.includes('ribbon-of-fate') && ctx.combat.cardsPlayedThisTurn === 0) effectiveCost = 0;
     if(state.run.relics.includes('ace-of-aces') && card.arcanaNum === 1 && card.suit !== 'major') effectiveCost = 0;
     effectiveCost = Math.max(0, effectiveCost);
+    if(fateRev) effectiveCost = Math.max(0, effectiveCost - 1);   // fate's discount
     const costEl = el.querySelector('.card-cost');
     costEl.textContent = effectiveCost;
     if(chainTax > 0 && effectiveCost > 0){ costEl.classList.add('cost-taxed'); costEl.title = `+${chainTax} chain tax`; }
+    if(fateRev){ costEl.classList.add('cost-fate'); costEl.title = 'Reversed — cheaper, but weaker'; }
     const playable = ctx.player.energy >= effectiveCost && !(card.suit === 'major' && ctx.combat.currentMajorCast);
     el.classList.add(playable ? 'playable' : 'unplayable');
     el.onclick = () => { if(playable) playCard(idx); };
@@ -3071,17 +3150,31 @@ function showCardInspect(card, entry){
   content.innerHTML = '';
   const big = renderCardElement(card, { reversed: entry && entry.reversed });
   content.appendChild(big);
-  info.innerHTML = `<em>${card.flavor || ''}</em>${(entry && entry.reversed) ? '<br><small style="color:var(--blood-bright)">REVERSED</small>' : ''}`;
-  // Patron Channel — offered only for a card live in your combat hand
+  const isMinor = card.suit==='wands'||card.suit==='cups'||card.suit==='swords'||card.suit==='pents';
+  const fateRev = isMinor && entry && entry.reversed;
+  const fateLine = fateRev
+    ? `<br><small style="color:var(--blood-bright)">↻ REVERSED — costs 1 less, effect ×${fateMultFor().toFixed(2)}</small>`
+    : '';
+  info.innerHTML = `<em>${card.flavor || ''}</em>${fateLine}`;
+  // In-combat hand actions: Patron Channel + the Priestess's Turn of Fate
   const inCombat = state.run && state.run.combat && state.run.combatPlayer;
   const hIdx = inCombat && entry ? state.run.combatPlayer.hand.indexOf(entry) : -1;
   if(inCombat && hIdx >= 0){
-    const pc = patronChannel();
-    const used = state.run.combat.channeledThisTurn;
     const act = document.createElement('div');
     act.className = 'ci-actions';
-    act.innerHTML = `<button class="ci-channel"${used?' disabled':''}>${used?'Channel spent this turn':'⟐ Channel — '+pc.label}</button>`;
-    if(!used) act.querySelector('button').onclick = () => channelCard(hIdx);
+    const pc = patronChannel();
+    const used = state.run.combat.channeledThisTurn;
+    const btns = [`<button class="ci-channel"${used?' disabled':''}>${used?'Channel spent this turn':'⟐ Channel — '+pc.label}</button>`];
+    const isPriestessMinor = state.run.patron === 'priestess' && isMinor;
+    const canTurn = isPriestessMinor && !state.run.combat.fateTurnedThisTurn;
+    if(isPriestessMinor){
+      btns.push(`<button class="ci-fate"${canTurn?'':' disabled'}>${canTurn?(entry.reversed?'↻ Right the card':'↻ Reverse the card'):'Fate turned this turn'}</button>`);
+    }
+    act.innerHTML = btns.join('');
+    const chBtn = act.querySelector('.ci-channel');
+    if(!used && chBtn) chBtn.onclick = () => channelCard(hIdx);
+    const fBtn = act.querySelector('.ci-fate');
+    if(canTurn && fBtn) fBtn.onclick = () => turnFate(hIdx);
     info.appendChild(act);
   }
   overlay.classList.add('active');
