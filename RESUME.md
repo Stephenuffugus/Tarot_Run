@@ -2,7 +2,7 @@
 
 When the user says "lets get started", read this first.
 
-## Where things are (as of B18 · PROPHECY READABLE — modal soft-lock fixed + Reading legible)
+## Where things are (as of B19 · THE GUARD SHATTERS — banish fixed + player-side juice)
 
 - **Live game (PERMANENT): https://stephenuffugus.github.io/Tarot_Run/**
   - GitHub Pages, "Deploy from a branch" = `setup/project-structure` root.
@@ -123,7 +123,31 @@ When the user says "lets get started", read this first.
    ▶/✔ markers and every step fires a banner (THE READING · Past
    foretold ✦ / ✦ PROPHECY FULFILLED ✦).
 
-## THE OPEN QUESTION — next playtest verdict (post B10–B18)
+18. **B19 · THE GUARD SHATTERS** — 2026-05-19 playtest verdict
+   (user ran Magician + Emperor; "pretty good so far"). Three asks:
+   (1) **Banish "doesn't open"** — REAL bug: `showBanishModal()` built
+   the deck grid into `#modal` but never `veil.classList.add('active')`
+   (`.modal-veil` is `display:none` until `.active`; every OTHER modal
+   does this). Also reset the SHARED `#modal._busy` on rebuild — it
+   was sticky, so post-fix the 1st banish worked but the next Rest's
+   was frozen. `showTutorPicker`/`showResurrectPicker` verified OK.
+   (2) **"Too curt / shields disappearing"** — player-side juice:
+   heal/block pops were spawning on the ENEMY portrait → now float off
+   the player HUD; block being spent was a silent `display:none` →
+   now `shieldShatter()` (shake + 7 shards) on any block >0→0 (one
+   chokepoint in `renderCombat`, catches hit-consumed AND turn-reset);
+   HP/Block/enemy-HP numbers pulse on change (`pulse()` + `_uiHpPrev/
+   _uiBlockPrev/_uiEhpPrev`, reset at combat start). All UI-only,
+   guarded by `typeof requestAnimationFrame !== 'function'` (the
+   codebase's "real browser" gate — sim stub has no rAF; the
+   B14 pattern). HP bars already had `transition:width`. sim-run
+   CAUGHT a `style.setProperty` crash mid-pass (stub `style:{}`) →
+   fixed by switching the guard from `typeof document` to the rAF
+   gate. (3) **Gold has no point** — confirmed (only sink is one
+   20g→15HP event, no shop). User picked **full Merchant node** →
+   that's B20, next.
+
+## THE OPEN QUESTION — next playtest verdict (post B10–B19)
 
 Both confirmed needs from the 2026-05-19 verdict are now SHIPPED:
 A (active skill) = B10 The Cut; B (strategy depth) = B11 The Web +
@@ -142,6 +166,19 @@ Awaiting the user's felt verdict on:
 3. **Decks balanced?** Each Patron deck is 16 cards, low curve, one
    off-suit splash that seeds its engine. If one feels weak/strong,
    adjust that deck's list in `PATRON_DECKS` (no test asserts contents).
+
+## NEXT (committed): B20 · THE MERCHANT
+
+User picked **full Merchant node** for the gold sink (over lean-into-
+existing-nodes / combat resource / scrap gold). Scope: a new map node
+type + shop screen — buy a card from a rotating stock (3 priced
+slots), pay gold to banish a card (no HP cost, reuses the now-fixed
+banish grid), buy a relic, buy a heal. STS/Hades model. Gold currently
+accrues from combat (+10+floor*1.5), chests, skip-offering, Page of
+Pents, two-of-coins relic, Mirror fortune — and has ~no sink. Don't
+bump `VERSION` (discards runs); add meta defensively via
+`migrateMeta()`. Place the node in the map generator; keep engine/
+tests green; ship + tell the user what to feel for.
 
 ## Likely next increments (let the user steer)
 
