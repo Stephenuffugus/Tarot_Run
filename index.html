@@ -570,13 +570,13 @@ body::after{
 
 /* damage / heal pop */
 .damage-pop{
-  position:absolute;
+  position:fixed;
   font-family: var(--font-display); font-size: 38px;
   color: var(--blood-bright);
   text-shadow: 0 2px 8px rgba(0,0,0,0.6), 0 0 18px rgba(198,61,79,0.55);
   pointer-events:none;
   animation: dmgPop 900ms ease-out forwards;
-  z-index: 30;
+  z-index: 60;
 }
 .damage-pop.heal{ color: var(--suit-cups); text-shadow: 0 2px 8px rgba(0,0,0,0.6), 0 0 18px rgba(62,114,134,0.55); }
 .damage-pop.block{ color: var(--suit-swords); text-shadow: 0 2px 8px rgba(0,0,0,0.6); }
@@ -584,6 +584,30 @@ body::after{
   0% { opacity: 0; transform: translateY(0) scale(0.5); }
   18% { opacity: 1; transform: translateY(-14px) scale(1.18); }
   100% { opacity: 0; transform: translateY(-72px) scale(0.92); }
+}
+
+/* B19 — player-side juice: HUD reads YOUR state, it no longer just snaps.
+   Heal/Block float off your HUD (not the enemy); the HP/Block numbers
+   pulse on change; your shield SHATTERS when it's spent (was: silent
+   display:none). All UI-only, rAF/DOM-guarded — engine/tests untouched. */
+@keyframes hudHit  { 0%{transform:none} 28%{transform:scale(1.4); color:var(--blood-bright)} 100%{transform:none; color:var(--card-cream)} }
+@keyframes hudHeal { 0%{transform:none} 28%{transform:scale(1.4); color:var(--suit-cups)}    100%{transform:none; color:var(--card-cream)} }
+@keyframes hudGain { 0%{transform:none} 35%{transform:scale(1.45) translateY(-2px)}           100%{transform:none} }
+#hud-hp.flash-dmg  { animation: hudHit  460ms ease-out; }
+#hud-hp.flash-heal { animation: hudHeal 520ms ease-out; }
+#enemy-hp.flash-dmg{ display:inline-block; animation: hudHit 420ms ease-out; }
+.block-stat.gain   { animation: hudGain 420ms ease-out; }
+.block-stat.broke  { animation: shake 320ms ease-in-out; }
+#shield-shatter{ position:fixed; z-index:82; pointer-events:none; }
+#shield-shatter .shard{
+  position:absolute; left:0; top:0; width:7px; height:9px;
+  background: linear-gradient(135deg, var(--suit-swords), #d2dde2);
+  box-shadow: 0 0 6px rgba(120,150,165,0.75);
+  animation: shardFly 560ms ease-out forwards;
+}
+@keyframes shardFly{
+  0%  { opacity:1; transform: translate(0,0) rotate(0); }
+  100%{ opacity:0; transform: translate(var(--sx), var(--sy)) rotate(var(--sr)); }
 }
 
 /* aspect banner */
@@ -1052,7 +1076,7 @@ body::after{
    ========================================================================= */
 
 const VERSION = 1;
-const BUILD = 'B18 · PROPHECY READABLE';  // visible on title; read it back to confirm you're current
+const BUILD = 'B19 · THE GUARD SHATTERS';  // visible on title; read it back to confirm you're current
 const SAVE_KEY = 'tarot-run-v1';
 
 /* ----- SEEDABLE RNG ----- */
@@ -1920,6 +1944,7 @@ function startCombat(enemyId){
   drawCards(ctx, 5);
 
   showScreen('combat-screen');
+  resetCombatFXState();   // B19 — don't FX the first paint off the last fight's numbers
   renderCombat();
   return ctx;
 }
@@ -2754,6 +2779,8 @@ function showBanishModal(){
   c.innerHTML = `<div class="mc-icon">⛒</div><div class="mc-text"><strong>Never mind</strong></div>`;
   c.onclick = () => { if(m._busy) return; m._busy = true; veil.classList.remove('active'); advanceFloor(); };
   cancel.appendChild(c);
+  m._busy = false;
+  veil.classList.add('active');   // B19 — every other modal does this; banish never did → it silently never opened
 }
 
 /* =====================================================================
@@ -2825,15 +2852,35 @@ function renderHand(){
   });
 }
 
+// B19 — UI-only change tracking so the HUD shows ACTION instead of snapping.
+// null = "no prior frame" (combat start) → never FX the first paint.
+let _uiHpPrev = null, _uiBlockPrev = null, _uiEhpPrev = null;
+function resetCombatFXState(){ _uiHpPrev = _uiBlockPrev = _uiEhpPrev = null; }
+function pulse(id, cls){
+  if(typeof requestAnimationFrame !== 'function') return;   // inert under sim/test stub DOM (B14 pattern)
+  const el = document.getElementById(id);
+  if(!el) return;
+  el.classList.remove(cls); void el.offsetWidth; el.classList.add(cls);
+}
+
 function renderCombat(){
   const ctx = getCtx();
-  document.getElementById('hud-hp').textContent = ctx.player.hp;
+  const hpEl = document.getElementById('hud-hp');
+  if(_uiHpPrev !== null && ctx.player.hp !== _uiHpPrev)
+    pulse('hud-hp', ctx.player.hp < _uiHpPrev ? 'flash-dmg' : 'flash-heal');
+  hpEl.textContent = ctx.player.hp;
   document.getElementById('hud-hp-fill').style.width = (100 * ctx.player.hp / ctx.player.maxHp) + '%';
   const blockEl = document.getElementById('hud-block-wrap');
   if(ctx.player.block > 0){
     blockEl.style.display = '';
     document.getElementById('hud-block').textContent = ctx.player.block;
-  } else { blockEl.style.display = 'none'; }
+    if(_uiBlockPrev !== null && ctx.player.block > _uiBlockPrev) pulse('hud-block-wrap', 'gain');
+    else if(_uiBlockPrev !== null && ctx.player.block < _uiBlockPrev) pulse('hud-block-wrap', 'broke');
+  } else {
+    // >0 → 0: the shield was SPENT (a hit ate it, or it expired). Was silent.
+    if(_uiBlockPrev) shieldShatter();
+    blockEl.style.display = 'none';
+  }
   // energy
   const ec = document.getElementById('energy-cluster');
   ec.innerHTML = '';
@@ -2848,6 +2895,7 @@ function renderCombat(){
   portrait.setAttribute('data-glyph', enemy.glyph);
   portrait.setAttribute('data-art-slot', `enemy-${enemy.id}`);
   document.getElementById('enemy-name').textContent = enemy.name;
+  if(_uiEhpPrev !== null && ctx.enemy.hp < _uiEhpPrev) pulse('enemy-hp', 'flash-dmg');
   document.getElementById('enemy-hp').textContent = ctx.enemy.hp;
   document.getElementById('enemy-maxhp').textContent = ctx.enemy.maxHp;
   document.getElementById('enemy-hp-fill').style.width = (100 * ctx.enemy.hp / ctx.enemy.maxHp) + '%';
@@ -2922,6 +2970,9 @@ function renderCombat(){
   // piles
   document.getElementById('draw-count').textContent = ctx.player.draw.length;
   document.getElementById('discard-count').textContent = ctx.player.discard.length;
+
+  // remember this frame so the next render can FX the delta
+  _uiHpPrev = ctx.player.hp; _uiBlockPrev = ctx.player.block; _uiEhpPrev = ctx.enemy.hp;
 }
 
 function formatStatusName(k){
@@ -3057,20 +3108,50 @@ function cutTheDeck(){
   strip.onclick = doCut;
 }
 
+// B19 — heal/block are YOUR events: float them off your HUD, not the enemy's
+// face (where they used to wrongly spawn). Damage still pops on the enemy.
 function showDamagePop(amt, kind){
-  const stage = document.querySelector('.enemy-zone');
-  const portrait = document.getElementById('enemy-portrait');
+  if(typeof requestAnimationFrame !== 'function') return;   // inert under sim/test stub DOM
+  const anchor = kind === 'heal'  ? document.getElementById('hud-hp')
+               : kind === 'block' ? document.getElementById('hud-block-wrap')
+               :                     document.getElementById('enemy-portrait');
+  if(!anchor) return;
+  const r = anchor.getBoundingClientRect();
   const pop = document.createElement('div');
   pop.className = 'damage-pop' + (kind === 'heal' ? ' heal' : (kind === 'block' ? ' block' : ''));
   pop.textContent = (kind === 'heal' ? '+' : (kind === 'block' ? '⛨ ' : '−')) + amt;
-  if(kind === 'heal') pop.textContent = '+' + amt;
-  if(kind === 'block') pop.textContent = '⛨ ' + amt;
-  const rect = portrait.getBoundingClientRect();
-  const stageRect = stage.getBoundingClientRect();
-  pop.style.left = (rect.left - stageRect.left + rect.width / 2 - 24 + (Math.random() * 30 - 15)) + 'px';
-  pop.style.top = (rect.top - stageRect.top + rect.height / 2 - 30) + 'px';
-  stage.appendChild(pop);
-  setTimeout(() => pop.remove(), 1100);
+  const onHud = kind === 'heal' || kind === 'block';
+  pop.style.left = (r.left + r.width / 2 - 22 + (Math.random() * 22 - 11)) + 'px';
+  // HUD sits at the very top — drop the pop just below it so its rise stays on-screen.
+  pop.style.top  = (onHud ? r.bottom + 6 : r.top + r.height / 2 - 26) + 'px';
+  document.body.appendChild(pop);
+  setTimeout(() => pop.remove(), 1000);
+}
+
+// B19 — your shield being spent used to be a silent display:none. Now it
+// cracks: a shake on the block stat + a burst of shards. Driven from
+// renderCombat's >0→0 transition so it catches BOTH a hit eating it and
+// the turn-start reset — one chokepoint, no engine touch.
+function shieldShatter(){
+  if(typeof requestAnimationFrame !== 'function') return;   // inert under sim/test stub DOM
+  const wrap = document.getElementById('hud-block-wrap');
+  if(!wrap) return;
+  wrap.classList.remove('broke'); void wrap.offsetWidth; wrap.classList.add('broke');
+  const r = wrap.getBoundingClientRect();
+  const fx = document.createElement('div'); fx.id = 'shield-shatter';
+  fx.style.left = (r.left + r.width / 2) + 'px';
+  fx.style.top  = (r.top  + r.height / 2) + 'px';
+  for(let i = 0; i < 7; i++){
+    const s = document.createElement('div'); s.className = 'shard';
+    const ang = Math.PI * 2 * (i / 7) + Math.random() * 0.7;
+    const dist = 24 + Math.random() * 22;
+    s.style.setProperty('--sx', (Math.cos(ang) * dist).toFixed(1) + 'px');
+    s.style.setProperty('--sy', (Math.sin(ang) * dist + 6).toFixed(1) + 'px');
+    s.style.setProperty('--sr', (Math.random() * 360 - 180).toFixed(0) + 'deg');
+    fx.appendChild(s);
+  }
+  document.body.appendChild(fx);
+  setTimeout(() => fx.remove(), 620);
 }
 
 function flashUnplayable(handIdx){
