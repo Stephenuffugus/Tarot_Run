@@ -80,7 +80,7 @@ console.log('  Enemy:', game.ENEMY_BY_ID[combatNode.enemyId].name, 'HP', run.com
 console.log('  Hand size:', run.combatPlayer.hand.length);
 console.log('  Draw pile size:', run.combatPlayer.draw.length);
 console.log('  Energy:', run.combatPlayer.energy);
-console.log('  Reading:', run.combat.reading.map(id => game.CARD_BY_ID[id].name).join(' / '));
+console.log('  Prophecy:', run.combat.reading.join(' → '), '(progress', run.combat.prophecyProgress + ')');
 
 // Play the first playable card
 console.log('\n=== PLAY CARDS ===');

@@ -68,6 +68,7 @@ console.log('\n--- TEST E: a Studied card deals +2 ---');
 const s = game.freshRun('study-seed'); game.state.run = s;
 s.floor = 0; s.path[0].chosenNode = 0; s.currentNode = s.path[0].nodes[0];
 game.startCombat(s.path[0].nodes[0].enemyId);
+s.combat.prophecyDone = true; // isolate: the Prophecy payoff must not perturb the Study delta
 const sp = () => s.combatPlayer, se = () => s.combatEnemy;
 // inject a known card (Two of Wands = wands-2, Strike 5) — once plain, once studied
 function playInjected(studied){
@@ -98,6 +99,7 @@ console.log('\n--- TEST G: The Chain escalates on same suit, resets on off-suit 
 const gr = game.freshRun('chain-seed', 'magician'); game.state.run = gr;
 gr.floor = 0; gr.path[0].chosenNode = 0; gr.currentNode = gr.path[0].nodes[0];
 game.startCombat(gr.path[0].nodes[0].enemyId);
+gr.combat.prophecyDone = true; // isolate: keep the Chain math free of the Prophecy payoff
 const gp=()=>gr.combatPlayer, ge=()=>gr.combatEnemy;
 ge().hp = 999; ge().maxHp = 999; // dummy so the sequence isn't cut short by a kill
 function gplay(cardId){ gp().hand.unshift({cardId,reversed:false}); gp().energy=9; const h=ge().hp; game.playCard(0); return h-ge().hp; }
@@ -113,6 +115,7 @@ console.log('\n--- TEST H: Wands lay Ember, the detonator cashes it in ---');
 const hr = game.freshRun('web-seed', 'magician'); game.state.run = hr;
 hr.floor = 0; hr.path[0].chosenNode = 0; hr.currentNode = hr.path[0].nodes[0];
 game.startCombat(hr.path[0].nodes[0].enemyId);
+hr.combat.prophecyDone = true; // isolate: keep the Ember math free of the Prophecy payoff
 const hpl=()=>hr.combatPlayer, hen=()=>hr.combatEnemy;
 hen().hp = 999; hen().maxHp = 999; hen().debuffs = {};
 function hplay(cardId){

@@ -348,6 +348,25 @@ body::after{
 .reading-card.fool::after, .reading-card.major::after{
   content: '✦'; position:absolute; top:2px; right:3px; font-size:8px; color: var(--ornament-gold);
 }
+/* B17 — The Prophecy: Past/Present/Future as a foretold suit sequence */
+.reading-card .rd-glyph{ font-family: var(--font-display); font-size: 22px; line-height: 1; }
+.reading-card.pf-wait{ opacity: 0.42; }
+.reading-card.pf-active{
+  border-color: var(--ornament-gold); color: var(--ornament-gold);
+  animation: pfPulse 1.3s ease-in-out infinite;
+}
+.reading-card.pf-active::after{
+  content: '▶'; position:absolute; top:2px; right:3px; font-size:8px; color: var(--ornament-gold);
+}
+.reading-card.pf-done{
+  background: linear-gradient(160deg, var(--card-cream), var(--card-cream-dim));
+  color: var(--ink-black); border-color: var(--ornament-gold);
+}
+.reading-card.pf-done .rd-pos{ color: var(--ornament-deep); }
+@keyframes pfPulse{
+  0%,100%{ box-shadow: 0 0 7px rgba(212,175,99,0.40); }
+  50%    { box-shadow: 0 0 16px rgba(212,175,99,0.85); }
+}
 
 /* The Cut — active Reading skill (pre-combat) */
 #cut-overlay{
@@ -1029,7 +1048,7 @@ body::after{
    ========================================================================= */
 
 const VERSION = 1;
-const BUILD = 'B16 · HAND & HEX';  // visible on title; read it back to confirm you're current
+const BUILD = 'B17 · THE PROPHECY';  // visible on title; read it back to confirm you're current
 const SAVE_KEY = 'tarot-run-v1';
 
 /* ----- SEEDABLE RNG ----- */
@@ -1808,11 +1827,15 @@ function startCombat(enemyId){
   const enemyDef = ENEMY_BY_ID[enemyId];
   const rng = mulberry32(run.rngSeed + run.floor * 7919);
 
-  // Draw the Reading: 3 random Major Arcana not in your deck
-  const ownedMajorIds = new Set(run.deck.filter(c => c.cardId.startsWith('major-')).map(c => c.cardId));
-  const majorPool = MAJOR_CARDS.map(c => c.id).filter(id => !ownedMajorIds.has(id));
-  shuffleInPlace(majorPool, rng);
-  const reading = majorPool.slice(0, 3);
+  // THE PROPHECY — the Reading foretells a suit SEQUENCE (Past→Present→
+  // Future). Fulfil it by playing minors of those suits in order (any
+  // turns) for a one-time payoff. The Patron's primary suit is weighted
+  // so the starter deck can realistically complete it. Ignore it freely
+  // — it never punishes, it's opt-in depth.
+  const PROPHECY_SUITS = ['wands','cups','swords','pents'];
+  const _prim = (PATRONS[run.patron] && PATRONS[run.patron].primary) || 'wands';
+  const _pool = PROPHECY_SUITS.concat([_prim, _prim]);   // bias toward your suit
+  const reading = [0,1,2].map(() => _pool[Math.floor(rng() * _pool.length)]);
 
   // Build draw pile from owned deck
   const drawPile = run.deck.map(c => ({ cardId: c.cardId, reversed:false, studied: !!c.studied }));
@@ -1821,8 +1844,9 @@ function startCombat(enemyId){
   const combat = {
     enemyId, rng,
     turn: 1,
-    reading, // [majorId, majorId, majorId] — past/present/future
-    readingRevealed: [false, false, false],
+    reading, // [suit,suit,suit] — the foretold Prophecy (Past/Present/Future)
+    prophecyProgress: 0,   // steps fulfilled, in order
+    prophecyDone: false,
     reward: null,
     log: [],
     turnCostMod: 0,
@@ -1971,6 +1995,24 @@ function playCard(handIdx){
   ctx.chainBonus = 0;
   // Empress turns fate's downside into her blessing
   if(fateReversed && state.run.patron === 'empress') healPlayer(ctx, 3);
+
+  // THE PROPHECY — a Minor of the next foretold suit advances the line;
+  // the full Past→Present→Future sequence pays off once. It only ever
+  // moves forward (off-suit never resets it) — opt-in depth, no punish.
+  if(MINOR && !ctx.combat.prophecyDone &&
+     ctx.combat.reading[ctx.combat.prophecyProgress] === card.suit){
+    ctx.combat.prophecyProgress += 1;
+    if(ctx.combat.prophecyProgress >= 3){
+      ctx.combat.prophecyDone = true;
+      healPlayer(ctx, 12);
+      dealDamage(ctx, 12);
+      ctx.player.maxEnergy += 1;
+      ctx.player.energy += 1;
+      const _pb = document.getElementById('aspect-banner');
+      if(_pb){ _pb.textContent = '✦ PROPHECY FULFILLED ✦';
+        _pb.classList.remove('show'); void _pb.offsetWidth; _pb.classList.add('show'); }
+    }
+  }
 
   // Loud, legible feedback so the combo is *felt*. Chain 3 is the
   // Aspect moment — let triggerAspect own the banner there.
@@ -2872,27 +2914,25 @@ function renderReadingStrip(){
   const ctx = getCtx();
   const strip = document.getElementById('reading-strip');
   strip.innerHTML = '';
+  const prog = ctx.combat.prophecyProgress || 0;
+  const done = !!ctx.combat.prophecyDone;
   ['Past', 'Present', 'Future'].forEach((pos, i) => {
-    const cardId = ctx.combat.reading[i];
-    const revealed = ctx.combat.readingRevealed[i];
-    const cardData = CARD_BY_ID[cardId];
+    const suit = ctx.combat.reading[i];
+    const stateCls = (done || i < prog) ? 'pf-done' : (i === prog ? 'pf-active' : 'pf-wait');
     const el = document.createElement('div');
-    el.className = 'reading-card' + (revealed ? ' revealed major' : '');
-    el.innerHTML = revealed
-      ? `<div class="rd-name">${cardData.name}</div><div class="rd-pos">${pos}</div>`
-      : `<div class="rd-name" style="font-size:14px;color:var(--ornament-gold);">?</div><div class="rd-pos">${pos}</div>`;
+    el.className = 'reading-card ' + stateCls;
+    el.innerHTML = `<div class="rd-glyph">${SUIT_GLYPH[suit] || '✦'}</div><div class="rd-pos">${pos}</div>`;
     el.onclick = () => {
-      if(revealed){
-        showCardInspect(cardData, { reversed:false });
-        return;
-      }
-      // reveal: pay 1 energy (FREE if the Cut landed the Sun) for a one-shot
-      const revealCost = ctx.combat.readingFortune === 'strong' ? 0 : 1;
-      if(ctx.player.energy < revealCost){ return; }
-      ctx.player.energy -= revealCost;
-      ctx.combat.readingRevealed[i] = true;
-      ctx.player.hand.push({ cardId, reversed:false, ephemeral:true });
-      renderCombat();
+      const seq = ctx.combat.reading.map(s => SUIT_NAME[s] || s).join('  →  ');
+      showModal({
+        title: done ? 'The Prophecy — fulfilled' : 'The Prophecy',
+        sub: seq,
+        body: done
+          ? 'You walked the foretold path. Its blessing is spent for this fight.'
+          : `Play a Minor of each suit <strong>in order</strong> — any turns, off-suit never resets it:<br><br>`
+            + ctx.combat.reading.map((s,k)=>`${k<prog?'✔':(k===prog?'▶':'·')} <strong>${SUIT_NAME[s]||s}</strong>`).join('<br>')
+            + `<br><br>Fulfil it → <strong>Heal 12 · Strike 12 · +1 max energy</strong>.<br>Ignore it freely — it never punishes.`,
+      });
     };
     strip.appendChild(el);
   });
@@ -2964,8 +3004,10 @@ function cutTheDeck(){
     if(zone === 'strong'){
       c.player.buffs.strength = (c.player.buffs.strength || 0) + 2;
       c.combat.readingFortune = 'strong';
+      // The Sun reveals the path — a free first step of the Prophecy
+      if((c.combat.prophecyProgress||0) < 1) c.combat.prophecyProgress = 1;
       title = 'The Sun'; glyph = '☉';
-      msg = 'The deck favors you — +2 Strength, and the Reading is free this combat.';
+      msg = 'The deck favors you — +2 Strength, and the Sun reveals the Prophecy’s first step.';
     } else if(zone === 'faint'){
       c.player.buffs.strength = (c.player.buffs.strength || 0) + 1;
       c.combat.readingFortune = 'faint';
