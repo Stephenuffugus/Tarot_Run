@@ -2,7 +2,7 @@
 
 When the user says "lets get started", read this first.
 
-## Where things are (as of B17 · THE PROPHECY — the Reading reworked into a foretold suit line)
+## Where things are (as of B18 · PROPHECY READABLE — modal soft-lock fixed + Reading legible)
 
 - **Live game (PERMANENT): https://stephenuffugus.github.io/Tarot_Run/**
   - GitHub Pages, "Deploy from a branch" = `setup/project-structure` root.
@@ -113,7 +113,17 @@ When the user says "lets get started", read this first.
    set `combat.prophecyDone=true` to isolate (like the chain-reset
    isolation). NOTE: Omen-Counter & Phased-Spread still on the table.
 
-## THE OPEN QUESTION — next playtest verdict (post B10–B17)
+17. **B18 · PROPHECY READABLE** — playtest hit a GAME-BREAKER:
+   `showModal({...})` with no `choices` had no close affordance
+   (`hideClose` was dead code; veil isn't tap-to-dismiss) → the
+   Prophecy explainer trapped the player. Root fix: showModal now
+   auto-appends a Continue button when no choices (unless `hideClose`).
+   Also: "Prophecy stuck" was a legibility miss (engine was right — it
+   needs the foretold SUITS in order); strip now shows suit NAME +
+   ▶/✔ markers and every step fires a banner (THE READING · Past
+   foretold ✦ / ✦ PROPHECY FULFILLED ✦).
+
+## THE OPEN QUESTION — next playtest verdict (post B10–B18)
 
 Both confirmed needs from the 2026-05-19 verdict are now SHIPPED:
 A (active skill) = B10 The Cut; B (strategy depth) = B11 The Web +
@@ -154,6 +164,9 @@ Awaiting the user's felt verdict on:
 ## Gotchas
 - Never bump `VERSION` (save-version) — it discards in-progress runs.
   Add new meta fields via `migrateMeta()` defensively instead.
+- `showModal` now auto-adds a Continue close button when no `choices`.
+  Only pass `hideClose:true` if you ALSO supply your own dismissal
+  (forced-choice modals), or you'll re-create the soft-lock.
 - `chainTaxFor` / `scaledEnemyHit` are single sources of truth — both
   playCard/renderHand and resolve/telegraph call them; keep it that way.
 - Don't sim-chase. `sim-run.js` greedy AI mass-mashes its dominant suit,
