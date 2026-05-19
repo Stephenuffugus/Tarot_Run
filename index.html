@@ -478,6 +478,10 @@ body::after{
   animation: sfxNum 920ms ease-out forwards; }
 #strike-fx .sfx-num.blocked{ color: var(--ornament-gold); font-size:32px; }
 @keyframes sfxFlash{ 0%{opacity:0} 22%{opacity:1} 100%{opacity:0} }
+/* B21 — Aspect detonation bloom (suit-tinted; tint set inline) */
+#aspect-fx{ position:fixed; inset:0; z-index:79; pointer-events:none;
+  animation: aspectBloom 760ms ease-out forwards; }
+@keyframes aspectBloom{ 0%{opacity:0; transform:scale(1.06)} 26%{opacity:1; transform:scale(1)} 100%{opacity:0; transform:scale(1)} }
 @keyframes sfxSlash{ 0%{transform:translate(-50%,-50%) rotate(-17deg) scaleX(0);opacity:0}
   42%{opacity:1} 62%{transform:translate(-50%,-50%) rotate(-17deg) scaleX(1)}
   100%{opacity:0;transform:translate(-50%,-50%) rotate(-17deg) scaleX(1)} }
@@ -1092,7 +1096,7 @@ body::after{
    ========================================================================= */
 
 const VERSION = 1;
-const BUILD = 'B20 · THE MERCHANT';  // visible on title; read it back to confirm you're current
+const BUILD = 'B21 · REWARD THE ENGINE';  // visible on title; read it back to confirm you're current
 const SAVE_KEY = 'tarot-run-v1';
 
 /* ----- SEEDABLE RNG ----- */
@@ -1229,10 +1233,13 @@ const SUIT_FACTORIES = {
       play(ctx){ return combine(healPlayer(ctx,5), drawCards(ctx,1)); } };
     if(n === 8) return { ...base, cost:2, desc:'Heal 4. Gain 5 Ward. Draw 1.', flavor:'Seven faces, one will.',
       play(ctx){ return combine(healPlayer(ctx,4), applyBuff(ctx,'ward',5), drawCards(ctx,1)); } };
-    if(n === 9) return { ...base, cost:2, desc:'Heal 6, then Strike 6 if you have healed 6+ this combat.', flavor:'The wish, paid forward as a wound.',
-      play(ctx){ const r = healPlayer(ctx,6); return ((ctx.combat&&ctx.combat.healedThisCombat||0) >= 6) ? combine(r, dealDamage(ctx,6)) : r; } };
-    if(n === 10) return { ...base, cost:2, desc:'Heal 8, then Strike equal to half the HP healed this combat + half your Ward (max 14).', flavor:'The flood remembers every shore.',
-      play(ctx){ const r = healPlayer(ctx,8); const dmg = Math.min(14, Math.floor((ctx.combat&&ctx.combat.healedThisCombat||0)/2) + Math.floor((ctx.player.buffs.ward||0)/2)); return combine(r, dealDamage(ctx,dmg)); } };
+    // B21 — was DEAD (65 fires / 1866 fights): the binary "if healed 6+"
+    // gate failed whenever you were near full HP. Now it ALWAYS strikes,
+    // scaling with cumulative healing — heal→damage is a real engine.
+    if(n === 9) return { ...base, cost:2, desc:'Heal 6. Strike equal to half the HP healed this combat (min 5).', flavor:'The wish, paid forward as a wound.',
+      play(ctx){ const r = healPlayer(ctx,6); const dmg = Math.max(5, Math.floor((ctx.combat&&ctx.combat.healedThisCombat||0)/2)); return combine(r, dealDamage(ctx,dmg)); } };
+    if(n === 10) return { ...base, cost:2, desc:'Heal 8, then Strike equal to half the HP healed this combat + half your Ward (max 22).', flavor:'The flood remembers every shore.',
+      play(ctx){ const r = healPlayer(ctx,8); const dmg = Math.min(22, Math.floor((ctx.combat&&ctx.combat.healedThisCombat||0)/2) + Math.floor((ctx.player.buffs.ward||0)/2)); return combine(r, dealDamage(ctx,dmg)); } };
     if(n === 11) return { ...base, cost: 0, desc: 'Draw 2.', flavor: 'The young one offers a wave.',
       play(ctx){ return drawCards(ctx, 2); } };
     if(n === 12) return { ...base, cost: 1, desc: 'Heal 6. Gain Resolve (+block at turn end).', flavor: 'A knight returns from drowning.',
@@ -2139,33 +2146,57 @@ function triggerAspect(suit){
   const ctx = getCtx();
   const banner = document.getElementById('aspect-banner');
   let text = '';
+  // B21 — the chain-of-3 capstone hits ~1.5× harder. It's the payoff
+  // for the whole Web; it should feel like a detonation, not a footnote.
   if(suit === 'wands'){
-    applyBuff(ctx, 'strength', 3);
+    applyBuff(ctx, 'strength', 5);
     text = 'ASPECT OF WANDS';
   } else if(suit === 'cups'){
-    healPlayer(ctx, 6);
+    healPlayer(ctx, 10);
     text = 'ASPECT OF CUPS';
   } else if(suit === 'swords'){
-    applyDebuff(ctx, 'vulnerable', 2);
+    applyDebuff(ctx, 'vulnerable', 3);
     text = 'ASPECT OF SWORDS';
   } else if(suit === 'pents'){
-    gainBlock(ctx, 10);
+    gainBlock(ctx, 16);
     text = 'ASPECT OF PENTACLES';
   } else if(suit === 'major'){
-    drawCards(ctx, 2);
+    drawCards(ctx, 3);
     text = 'GREAT ARCANA';
   }
   banner.textContent = text;
   banner.classList.remove('show'); void banner.offsetWidth;
   banner.classList.add('show');
+  aspectFX(suit);
+}
+
+// B21 — the Aspect now lands with a screen punch: a suit-coloured
+// full-screen bloom + shake. UI-only, rAF-guarded (inert under the
+// sim/test stub DOM — same gate as the rest of the FX layer).
+function aspectFX(suit){
+  if(typeof requestAnimationFrame !== 'function') return;
+  const tint = { wands:'232,104,47', cups:'62,114,134', swords:'150,150,165',
+                  pents:'201,162,90', major:'212,165,116' }[suit] || '212,165,116';
+  const screen = document.getElementById('combat-screen') || document.body;
+  if(screen){ screen.classList.remove('combat-shake'); void screen.offsetWidth; screen.classList.add('combat-shake'); }
+  const fx = document.createElement('div'); fx.id = 'aspect-fx';
+  fx.style.background = `radial-gradient(circle at 50% 46%, rgba(${tint},0) 38%, rgba(${tint},0.42) 100%)`;
+  document.body.appendChild(fx);
+  setTimeout(() => { fx.remove(); if(screen) screen.classList.remove('combat-shake'); }, 760);
 }
 
 // The Chain bonus curve: the Nth same-suit card in a row adds this to
-// every Strike/Pierce/Block/Heal it does. Escalates hard so a focused,
-// well-sequenced deck massively out-performs scattershot play.
+// every Strike/Pierce/Block/Heal it does. B21 — escalates STEEPLY so a
+// built, well-sequenced chain massively out-performs scattershot play
+// (the stress test showed mashing ≈ comboing; this makes the Web the
+// reason to play). The chain TAX (chainTaxFor) stays LOCKED — we buy
+// more reward, not cheaper cost.
 function chainBonusFor(count){
   if(count <= 1) return 0;
-  return Math.min(8, (count - 1) * 2);   // 2 → +2, 3 → +4, 4 → +6, 5+ → +8
+  if(count === 2) return 3;
+  if(count === 3) return 6;
+  if(count === 4) return 10;
+  return 15;                              // 2→+3, 3→+6, 4→+10, 5+→+15
 }
 // The Chain TAX — extra energy to extend a chain. First CHAIN_TAX_FREE
 // cards are free (basic 2-combo costs nothing); pushing a BIG chain is

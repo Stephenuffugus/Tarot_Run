@@ -104,12 +104,12 @@ const gp=()=>gr.combatPlayer, ge=()=>gr.combatEnemy;
 ge().hp = 999; ge().maxHp = 999; // dummy so the sequence isn't cut short by a kill
 function gplay(cardId){ gp().hand.unshift({cardId,reversed:false}); gp().energy=9; const h=ge().hp; game.playCard(0); return h-ge().hp; }
 // Stop at chain 2 so the chain-of-3 Aspect never fires and confounds it.
-const a=gplay('wands-2');   // chain1 -> +0 -> 5
-const b=gplay('wands-2');   // chain2 -> +2 -> 7
+const a=gplay('wands-2');   // chain1 -> +0  -> 5
+const b=gplay('wands-2');   // chain2 -> +3  -> 8   (B21 steep curve: 3/6/10/15)
 const off=gplay('swords-2');// off-suit: chain resets to swords1 -> pierce 3
 const d=gplay('wands-2');   // wands chain reset to 1 -> +0 -> 5
-console.log(`  Wands chain: ${a}, ${b} (expect 5,7); off-suit Swords ${off} (expect 3); Wands after reset ${d} (expect 5)`);
-console.log('  RESULT:', (a===5&&b===7&&off===3&&d===5) ? 'PASS — Chain escalates +2/step and resets on suit change' : 'FAIL');
+console.log(`  Wands chain: ${a}, ${b} (expect 5,8); off-suit Swords ${off} (expect 3); Wands after reset ${d} (expect 5)`);
+console.log('  RESULT:', (a===5&&b===8&&off===3&&d===5) ? 'PASS — Chain escalates (B21: +3 at chain-2) and resets on suit change' : 'FAIL');
 
 console.log('\n--- TEST H: Wands lay Ember, the detonator cashes it in ---');
 const hr = game.freshRun('web-seed', 'magician'); game.state.run = hr;
