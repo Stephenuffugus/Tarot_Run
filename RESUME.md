@@ -2,12 +2,18 @@
 
 When the user says "lets get started", read this first.
 
-## Where things are (as of B9 · CHAIN TEETH, commit 8648c4f)
+## Where things are (as of B9 · CHAIN TEETH, hosting solved)
 
-- Live game: **tinyurl.com/29xf8brd** (served off disk by `python3 -m http.server 8000`
-  in this Codespace; every commit is instantly live — never a new link).
-  Restart server if down: `nohup python3 -m http.server 8000 >/tmp/tarot-server.log 2>&1 &`
+- **Live game (PERMANENT): https://stephenuffugus.github.io/Tarot_Run/**
+  - GitHub Pages, "Deploy from a branch" = `setup/project-structure` root.
+  - Up 24/7 regardless of the Codespace. Every `git push` auto-deploys in ~1 min.
+  - The old Codespace `python3 -m http.server` + tinyurl chain is DEAD —
+    never restart it, never hand the user a tinyurl. The github.io URL is it.
+  - `.nojekyll` at repo root makes Pages serve files as-is. Keep it.
+  - Verify a deploy: `curl -s https://stephenuffugus.github.io/Tarot_Run/ | grep "const BUILD"`
+    should echo the current `BUILD` const from index.html.
 - Branch: **setup/project-structure** (pushed to origin). NOT merged to main.
+  Pages serves THIS branch — keep shipping here.
 - Build tag shown on title screen = `BUILD` const in index.html. Bump it every
   shippable change so the user can verify cache by reading it back.
 - Tests: `node test-cards.js` (78/0 errors), `node test.js`, `node sim-run.js`,
@@ -23,45 +29,52 @@ When the user says "lets get started", read this first.
 5. Retention meta: Insight (every run), The Mirror (spend Insight on Vigor/
    Fortune/Deep Reading), VEILS ladder data (unlock on win; application deferred).
 6. **The Chain** — consecutive same-suit minor cards: +2/+4/+6/+8, off-suit
-   resets, Major is wild, chain-of-3 detonates the suit Aspect. One legible
-   mechanic (replaced old hidden Aspect Resonance). Loud banner.
+   resets, Major is wild, chain-of-3 detonates the suit Aspect. Loud banner.
 7. **Chain has teeth** — extending a chain costs energy (`chainTaxFor`:
-   FREE=2, CAP=3 → tax 0,0,1,2,3,3). Charged before affordability; taxed
-   cost shows amber-pulsing in hand.
+   FREE=2, CAP=3 → tax 0,0,1,2,3,3). Charged before affordability.
+8. **Hosting solved** — permanent GitHub Pages URL (see above).
 
-## THE OPEN DECISION — do this first on resume
+## THE OPEN DECISION — RESOLVED (2026-05-19 playtest verdict)
 
-I asked the user to playtest B9 and answer:
-1. Does "push the chain vs. bank energy for defense/Reading" feel like a real,
-   interesting decision each turn — or too tight/annoying?
-2. Can they still win with smart play, or does it feel unfair?
+User's verdict: "starting to get more fun, we're getting there" but
+"more than just a choice to make — like a mini game sometimes, little
+skill things" and "still very simple, lacking depth in strategy."
 
-Their answer routes the next move:
-- **"Too punishing"** → raise `CHAIN_TAX_FREE` to 3 (and/or `CHAIN_TAX_CAP` to 2)
-  in index.html, re-verify diag, ship, bump BUILD.
-- **"Still too easy / I just pay it"** → `CHAIN_TAX_FREE` 1 and/or raise CAP,
-  consider also nudging `ENEMY_DMG_MULT` up ~0.66.
-- **"This is the decision I wanted"** → lock it; proceed to the deep fix below.
+Routing: the Chain dial is RIGHT — do NOT re-tune the tax, do NOT
+sim-chase. The game now needs TWO things, both confirmed by the user:
+  A. An **active skill layer** ("little skill things, mini game sometimes")
+     — Hades-style active inputs, not deeper menus. This is the new
+     headline direction.
+  B. **More strategic depth** — the deferred task #18 (rework 56 minor
+     cards for real card-to-card synergy).
 
-DO NOT sim-chase. `sim-run.js` greedy AI only mass-mashes its dominant suit —
-exactly the line the Chain Tax punishes — so it now reads ~0% by design and
-is NOT a validity signal. Tune by the user's felt experience + diag shape.
+Ship A first in small playtestable increments (it changes moment-to-moment
+feel fastest); B is the slower deep fix underneath it.
 
-## Next deep work (task #18, after the dial is locked)
+## Next work — the skill layer (A), ship-small loop
 
-**Rework the 56 vanilla minor cards for real card-to-card synergy.** This is
-the deferred core fix. Right now minors are "Strike N / Block N" stat sticks;
-the Chain adds tension but the cards themselves don't interact. Per the R&D:
-- Wands → Ember (lay/detonate), Swords → debuff payoff, Cups → Ward engine,
-  Pentacles → block-into-damage. Each suit gets cards that key off the others.
-- Keep all 78 cards working (`node test-cards.js` must stay 0 errors).
-- Build combo pieces into the Patron starter decks so synergy is felt turn one.
+Candidate first increments (let the user steer; see session for the
+chosen one). All must keep `node test-cards.js` at 0 errors + diag green:
+- **Active Reading** — convert the passive RNG Reading into a recurring
+  skill input ("cut the deck" timing/precision → scales the boon).
+- **Chain detonation skill** — sweet-spot timing on the chain-of-3
+  Aspect detonation; nailing it amplifies, optional push-luck backfire.
+- **Arcana Trial events** — occasional Major-Arcana mini-game rooms
+  (Wheel push-luck, Tower reflex, Star memory) between fights.
+
+## Then: task #18 — 56-card synergy (strategy depth, B)
+
+Rework the 56 vanilla minors for real card-to-card synergy: Wands→Ember
+lay/detonate, Swords→debuff payoff, Cups→Ward engine, Pents→block→damage;
+each suit keys off the others. Build combo pieces into Patron starter
+decks so synergy is felt turn one. Keep all 78 cards working.
 
 ## Backlog (lower priority)
-- Apply the VEILS modifiers (data exists; wire enemy HP/dmg/restHeal mods + a
-  Veil picker at run start).
-- Per-Patron balance pass once the Chain economy is locked.
-- Reading-as-decision rework (currently underused RNG, should be info/choice).
+- Apply the VEILS modifiers (data exists; wire enemy HP/dmg/restHeal mods
+  + a Veil picker at run start).
+- Per-Patron balance pass once the skill layer + synergy land.
+- Hostinger/custom domain for the branded *published* build (later;
+  Pages is the dev/playtest home).
 - Eventually: merge setup/project-structure → main; per the user's call.
 
 ## Gotchas
@@ -69,5 +82,9 @@ the Chain adds tension but the cards themselves don't interact. Per the R&D:
   Add new meta fields via `migrateMeta()` defensively instead.
 - `chainTaxFor` / `scaledEnemyHit` are single sources of truth — both
   playCard/renderHand and resolve/telegraph call them; keep it that way.
-- Commit + push after every green increment; the user works in fast
-  ship-and-playtest loops on their phone.
+- Don't sim-chase. `sim-run.js` greedy AI mass-mashes its dominant suit,
+  reads ~0% by design, and never uses Reading — NOT a validity signal.
+  Tune by the user's felt playtest experience + diag shape.
+- Commit + push after every green increment; Pages auto-deploys it.
+  The user playtests on their phone in fast loops — keep changelogs
+  punchy and tell them exactly what to FEEL for.

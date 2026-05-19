@@ -349,6 +349,55 @@ body::after{
   content: '✦'; position:absolute; top:2px; right:3px; font-size:8px; color: var(--ornament-gold);
 }
 
+/* The Cut — active Reading skill (pre-combat) */
+#cut-overlay{
+  position:fixed; inset:0; z-index:90;
+  background: radial-gradient(circle at 50% 34%, rgba(20,40,46,0.97), rgba(7,14,18,0.99));
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  gap:16px; padding:24px; text-align:center; font-family: var(--font-body);
+  animation: cutIn 220ms ease-out;
+}
+#cut-overlay.out{ animation: cutOut 340ms ease-in forwards; }
+@keyframes cutIn{ from{opacity:0; transform:scale(0.98)} to{opacity:1; transform:scale(1)} }
+@keyframes cutOut{ from{opacity:1} to{opacity:0} }
+.cut-title{
+  font-family: var(--font-display); font-size:23px; letter-spacing:0.16em;
+  text-transform:uppercase; color: var(--ornament-gold);
+}
+.cut-sub{ font-size:13px; font-style:italic; opacity:0.72; max-width:300px; line-height:1.4; }
+.cut-strip{ display:flex; gap:8px; padding:18px 8px; }
+.cut-slot{
+  width:46px; height:70px; border-radius:5px;
+  background: linear-gradient(160deg, var(--ink-black), var(--velvet));
+  border:1px solid var(--ornament-deep);
+  display:flex; align-items:center; justify-content:center;
+  font-family: var(--font-display); font-size:22px; color: var(--ornament-deep);
+  transition: transform 110ms ease, border-color 110ms, box-shadow 110ms;
+}
+.cut-slot.lit{
+  transform: translateY(-9px);
+  border-color: var(--ornament-gold); color: var(--ornament-gold);
+  box-shadow: 0 0 18px rgba(212,175,99,0.55);
+}
+.cut-slot.flip{
+  background: linear-gradient(160deg, var(--card-cream), var(--card-cream-dim));
+  color: var(--ink-black); border-color: var(--ornament-gold);
+  transform: translateY(-9px) scale(1.06);
+}
+.cut-btn{
+  margin-top:4px; font-family: var(--font-display); font-size:18px;
+  letter-spacing:0.2em; text-transform:uppercase;
+  padding:14px 44px; border-radius:6px; cursor:pointer;
+  background: var(--ornament-gold); color: var(--ink-black);
+  border:none; transition: transform 90ms;
+}
+.cut-btn:active{ transform: scale(0.96); }
+.cut-result{
+  min-height:24px; font-family: var(--font-display); font-size:16px;
+  letter-spacing:0.05em; color: var(--card-cream); max-width:320px; line-height:1.4;
+}
+.cut-result strong{ color: var(--ornament-gold); }
+
 .enemy-zone{
   flex: 1;
   min-height: 0;
@@ -904,7 +953,7 @@ body::after{
    ========================================================================= */
 
 const VERSION = 1;
-const BUILD = 'B9 · CHAIN TEETH';  // visible on title; read it back to confirm you're current
+const BUILD = 'B10 · THE CUT';  // visible on title; read it back to confirm you're current
 const SAVE_KEY = 'tarot-run-v1';
 
 /* ----- SEEDABLE RNG ----- */
@@ -1639,6 +1688,9 @@ function startCombat(enemyId){
     currentMajorCast: null,
     // pending choice modal (e.g. discard choice, lover choice)
     pendingChoice: null,
+    // The Cut (active Reading skill) result. 'silent' = legacy behavior;
+    // set by cutTheDeck() on the UI path only — engine/tests never change it.
+    readingFortune: 'silent',
   };
 
   const player = {
@@ -2124,6 +2176,7 @@ function enterNode(node){
   const run = state.run;
   if(node.type === 'combat' || node.type === 'elite' || node.type === 'boss'){
     startCombat(node.enemyId);
+    cutTheDeck(); // active Reading skill — overlays the freshly-shown combat
   } else if(node.type === 'rest'){
     showRestModal();
   } else if(node.type === 'event'){
@@ -2586,15 +2639,111 @@ function renderReadingStrip(){
         showCardInspect(cardData, { reversed:false });
         return;
       }
-      // reveal: pay 1 energy to add this card to hand as a one-shot
-      if(ctx.player.energy < 1){ return; }
-      ctx.player.energy -= 1;
+      // reveal: pay 1 energy (FREE if the Cut landed the Sun) for a one-shot
+      const revealCost = ctx.combat.readingFortune === 'strong' ? 0 : 1;
+      if(ctx.player.energy < revealCost){ return; }
+      ctx.player.energy -= revealCost;
       ctx.combat.readingRevealed[i] = true;
       ctx.player.hand.push({ cardId, reversed:false, ephemeral:true });
       renderCombat();
     };
     strip.appendChild(el);
   });
+}
+
+/* The Cut — the active Reading skill. UI-only: invoked from enterNode after
+   startCombat, so the headless Node engine/tests never reach it. Guarded on
+   requestAnimationFrame too. Sets combat.readingFortune + a real buff/curse;
+   'silent' (the default) reproduces the legacy Reading exactly. */
+function cutTheDeck(){
+  if(typeof requestAnimationFrame !== 'function') return;
+  const ctx = getCtx();
+  if(!ctx || !ctx.combat) return;
+
+  const ZONES = ['tower','silent','faint','strong','faint','silent','tower'];
+  const N = ZONES.length;
+  const floor = (state.run && state.run.floor) || 0;
+  const speed = 0.0030 + floor * 0.00024; // slots/ms — deeper = faster = harder
+  let pos = 0, dir = 1, frozen = false, raf = null, autoT = null;
+  let last = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+
+  const ov = document.createElement('div');
+  ov.id = 'cut-overlay';
+  ov.innerHTML =
+    '<div class="cut-title">The Reading</div>' +
+    '<div class="cut-sub">Cut the deck. Land the bright Arcana — the Sun favors a steady hand. The Tower waits at the edges.</div>' +
+    '<div class="cut-strip" id="cut-strip"></div>' +
+    '<div class="cut-result" id="cut-result">&nbsp;</div>' +
+    '<button class="cut-btn" id="cut-btn">Cut</button>';
+  document.body.appendChild(ov);
+
+  const strip = ov.querySelector('#cut-strip');
+  const slots = [];
+  for(let i=0;i<N;i++){
+    const s = document.createElement('div');
+    s.className = 'cut-slot';
+    strip.appendChild(s); slots.push(s);
+  }
+
+  function frame(now){
+    const dt = Math.min(48, now - last); last = now;
+    pos += dir * speed * dt;
+    if(pos >= N-1){ pos = N-1; dir = -1; }
+    if(pos <= 0){ pos = 0; dir = 1; }
+    const idx = Math.round(pos);
+    for(let i=0;i<N;i++) slots[i].classList.toggle('lit', i === idx);
+    if(!frozen) raf = requestAnimationFrame(frame);
+  }
+  raf = requestAnimationFrame(frame);
+
+  function dismiss(){
+    if(ov._gone) return; ov._gone = true;
+    if(autoT) clearTimeout(autoT);
+    ov.classList.add('out');
+    setTimeout(() => { ov.remove(); renderCombat(); }, 360);
+  }
+
+  function doCut(){
+    if(frozen) return;
+    frozen = true;
+    if(raf && typeof cancelAnimationFrame === 'function') cancelAnimationFrame(raf);
+    const idx = Math.round(pos);
+    const zone = ZONES[idx];
+    const land = slots[idx];
+    land.classList.remove('lit');
+    land.classList.add('flip');
+    const c = getCtx();
+    let title, msg, glyph;
+    if(zone === 'strong'){
+      c.player.buffs.strength = (c.player.buffs.strength || 0) + 2;
+      c.combat.readingFortune = 'strong';
+      title = 'The Sun'; glyph = '☉';
+      msg = 'The deck favors you — +2 Strength, and the Reading is free this combat.';
+    } else if(zone === 'faint'){
+      c.player.buffs.strength = (c.player.buffs.strength || 0) + 1;
+      c.combat.readingFortune = 'faint';
+      title = 'A Faint Omen'; glyph = '✦';
+      msg = 'A near cut. +1 Strength.';
+    } else if(zone === 'tower'){
+      c.player.debuffs.weak = (c.player.debuffs.weak || 0) + 2;
+      c.combat.readingFortune = 'tower';
+      title = 'The Tower'; glyph = '⚡';
+      msg = 'A bad cut — the Tower falls. You start Weak 2.';
+    } else {
+      c.combat.readingFortune = 'silent';
+      title = 'Silence'; glyph = '·';
+      msg = 'The deck stays silent. Read it the old way — 1 energy a card.';
+    }
+    land.textContent = glyph;
+    ov.querySelector('#cut-result').innerHTML = '<strong>' + title + '.</strong> ' + msg;
+    const btn = ov.querySelector('#cut-btn');
+    btn.textContent = 'Begin';
+    btn.onclick = dismiss;
+    autoT = setTimeout(dismiss, 2000);
+  }
+
+  ov.querySelector('#cut-btn').onclick = doCut;
+  strip.onclick = doCut;
 }
 
 function showDamagePop(amt, kind){
