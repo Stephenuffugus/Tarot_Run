@@ -2,7 +2,7 @@
 
 When the user says "lets get started", read this first.
 
-## Where things are (as of B20 · THE MERCHANT — gold has a sink)
+## Where things are (as of B21 · REWARD THE ENGINE — combos pay, Aspect detonates, Cups lives)
 
 - **Live game (PERMANENT): https://stephenuffugus.github.io/Tarot_Run/**
   - GitHub Pages, "Deploy from a branch" = `setup/project-structure` root.
@@ -180,7 +180,30 @@ Awaiting the user's felt verdict on:
    CHOICE (shop or heal), + ~6% in the random pool; verified 400
    seeds (floor-6 400/400, ~2.67/run). Glyph ⚖.
 
-## Awaiting felt verdict (B19 + B20)
+20. **B21 · REWARD THE ENGINE** — user asked "stress test + make it
+   50% more fun." Heavy stress (150 seeds × 4 player-types × 4
+   Patrons): runs front-load deaths (cliff not curve, esp.
+   Empress/Emperor f0), comboist−masher delta NEGATIVE 3/4 Patrons
+   (depth not rewarded), Cups Heal→damage DEAD (65/1866). The Cut's
+   skill gradient is healthy (don't touch). User picked the "reward
+   the engine" lever (over Chain-3-skill-moment / spectacle / smooth-
+   cliff — those remain on the table). Shipped: `chainBonusFor`
+   2/4/6/8 → **3/6/10/15** (chain TAX stays LOCKED — buy reward not
+   cheaper cost); `triggerAspect` ~1.5× + `aspectFX()` suit-tinted
+   screen bloom+shake (UI-only, rAF-gated); cups-9 binary "if healed
+   6+" gate REMOVED → always Strike = ½ cumulative heal (min 5),
+   cups-10 cap 14→22. diag TEST G updated to lock the new curve
+   (chain-2 = +3 → 5,8). KEY DISCIPLINE NOTE: re-sim showed
+   Heal→damage 65→148 (VALID signal, verb revived) but the
+   comboist−masher delta did NOT improve (emperor masher 10→13) —
+   EXPECTED, because sim's "masher" spams its DOMINANT suit (=
+   accidental chainer) so a steeper chain helps the bot both ways;
+   the sim cannot model real cross-suit/Cut/Prophecy skill. Per
+   working-style: this lever is felt-verified ONLY; do NOT sim-chase
+   the delta. Watch in playtest: does Pents/block-spam feel too
+   dominant now (emperor masher rose)?
+
+## Awaiting felt verdict (B19 + B20 + B21)
 
 - **B19**: banish opens cleanly now? The shield-shatter — lands, too
   much, too little? Combat read less "curt" (heal/block off YOUR HUD,
@@ -191,6 +214,15 @@ Awaiting the user's felt verdict on:
   variety good? Banish-for-coin worth it vs the HP Hermit's Bargain?
   → routes to: tune `SHOP_PRICE` / add floor-scaling / change node
   frequency / adjust stock pool.
+- **B21**: does a built chain now FEEL like it dwarfs off-suit play
+  (the +3/6/10/15 curve)? Does the chain-3 Aspect detonate (screen
+  bloom + ~1.5× effect) land as a payoff moment? Do Cups decks have
+  teeth now (heal→strike always fires)? Is Pents/block-spam too
+  strong post-buff? → routes to: tune `chainBonusFor` curve / Aspect
+  numbers / per-suit. Other fun levers still on the table if this
+  doesn't land: Chain-3 active skill-moment, spectacle pass,
+  smooth-the-cliff (the opening cliff is real but absolute difficulty
+  is bot-capped — needs felt confirmation, not sim).
 
 ## Likely next increments (let the user steer)
 
