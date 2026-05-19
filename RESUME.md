@@ -2,7 +2,7 @@
 
 When the user says "lets get started", read this first.
 
-## Where things are (as of B16 · HAND & HEX — hand scroll + debuff-duration fix)
+## Where things are (as of B17 · THE PROPHECY — the Reading reworked into a foretold suit line)
 
 - **Live game (PERMANENT): https://stephenuffugus.github.io/Tarot_Run/**
   - GitHub Pages, "Deploy from a branch" = `setup/project-structure` root.
@@ -101,20 +101,19 @@ When the user says "lets get started", read this first.
    B11 debuff web) was impossible across turns. `applyDebuff` now gives
    weak/vulnerable +1 duration (single chokepoint; burn untouched).
 
-## NEXT — the Reading (Past/Present/Future) rework, awaiting user pick
-User: "don't understand what Past/Present/Future does, what's the
-point" + sees potential for "a little rng / deep strategy / rock-
-paper-scissors bonus". CURRENT: 3 random Majors face-down; tap → pay
-1 energy (0 if Cut=Sun) → that Major enters hand as a one-shot. The
-P/P/F labels are pure flavour — mechanically identical, no strategy,
-misleading. Long-flagged "Reading-as-decision" rework. Options put to
-the user (previews): (1) **The Prophecy** — foretold suit *sequence*;
-fulfil it in order this combat → big payoff [recommended: deepest,
-on-theme, reuses suits/Chain]; (2) **Omen Counter** — RPS vs the
-enemy's intent nature; (3) **Phased Spread** — make P/P/F concretely
-different (free-now / pay-now / auto-future) + full-set bonus.
+16. **B17 · THE PROPHECY** — user picked it (over Omen-Counter RPS /
+   Phased Spread). The Reading now FORETELLS a 3-suit sequence
+   (`combat.reading` = [suit,suit,suit], Patron primary weighted via
+   `_pool`). Play Minors of those suits IN ORDER, any turns; off-suit
+   never resets (`prophecyProgress` only moves forward) — opt-in, no
+   punish. Fulfil → Heal 12 · Strike 12 · +1 maxEnergy, once
+   (`prophecyDone`). Cut's Sun now seeds `prophecyProgress=1` (the
+   free-reveal clause was moot). Strip = glyphs + Past/Present/Future
+   with pf-done/pf-active/pf-wait; tap = explainer modal. diag E/G/H
+   set `combat.prophecyDone=true` to isolate (like the chain-reset
+   isolation). NOTE: Omen-Counter & Phased-Spread still on the table.
 
-## THE OPEN QUESTION — next playtest verdict (post B10–B16)
+## THE OPEN QUESTION — next playtest verdict (post B10–B17)
 
 Both confirmed needs from the 2026-05-19 verdict are now SHIPPED:
 A (active skill) = B10 The Cut; B (strategy depth) = B11 The Web +
