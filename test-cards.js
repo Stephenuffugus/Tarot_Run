@@ -57,11 +57,36 @@ game.ALL_CARDS.forEach(card => {
   }
 });
 
-console.log(`Cards tested: ${game.ALL_CARDS.length}`);
-console.log(`Errors: ${errors.length}`);
-if(errors.length){
-  errors.forEach(e => console.log('  ✗ ' + e.card + ': ' + e.error));
-}
+// B24 — the Reversed (shadow) face is now a real effect: exercise every
+// reversedPlay so the 56 new effects can't silently throw.
+const revErrors = [];
+let revCount = 0;
+game.ALL_CARDS.forEach(card => {
+  if(typeof card.reversedPlay !== 'function') return;
+  revCount++;
+  game.state.run = game.freshRun('rev-' + card.id);
+  game.startCombat('crown');
+  const ctx = { player: game.state.run.combatPlayer, enemy: game.state.run.combatEnemy, combat: game.state.run.combat, run: game.state.run };
+  ctx.player.energy = 10;
+  ctx.player.hand.push({ cardId:'wands-1', reversed:false });
+  ctx.player.discard.push({ cardId:'swords-1', reversed:false });
+  // seed combat-relative state so heal→/debuff→/block→ scalers have inputs
+  ctx.combat.healedThisCombat = 12;
+  ctx.player.block = 12;
+  ctx.player.buffs.ward = 8;
+  ctx.enemy.debuffs.burn = 3; ctx.enemy.debuffs.weak = 1; ctx.enemy.debuffs.vulnerable = 1;
+  try {
+    const r = card.reversedPlay(ctx);
+    if(r === undefined || r === null) revErrors.push({ card: card.name + ' (rev)', error: 'returned nothing' });
+  } catch(e){
+    revErrors.push({ card: card.name + ' (rev)', error: e.message });
+  }
+});
+
+console.log(`Cards tested: ${game.ALL_CARDS.length}  (+${revCount} reversed faces)`);
+console.log(`Errors: ${errors.length + revErrors.length}`);
+if(errors.length){ errors.forEach(e => console.log('  ✗ ' + e.card + ': ' + e.error)); }
+if(revErrors.length){ revErrors.forEach(e => console.log('  ✗ ' + e.card + ': ' + e.error)); }
 
 // Damage stats by suit
 const suitDmg = {};

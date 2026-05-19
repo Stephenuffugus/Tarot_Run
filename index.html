@@ -733,6 +733,13 @@ body::after{
 /* B15 — fate-reversed in hand: readable (no flip), marked by a ribbon */
 .card.fate-rev{ filter: sepia(0.32) hue-rotate(-12deg) brightness(0.93); }
 .card.fate-rev .card-art{ filter: grayscale(0.28); }
+/* B24 — the SHADOW face: a cold inverted tint, clearly "the other half" */
+.card.shadow{ filter: hue-rotate(150deg) saturate(0.7) brightness(0.92); }
+.card.shadow .card-art{ filter: invert(0.08) brightness(0.85); }
+.card.shadow .card-desc{ color: #cfe3e8; }
+.fate-ribbon.shadow-ribbon{
+  background: linear-gradient(90deg, rgba(40,86,104,0.92), rgba(28,64,82,0.92));
+}
 .fate-ribbon{
   position:absolute; left:0; right:0; bottom:0;
   background: linear-gradient(90deg, rgba(150,16,16,0.88), rgba(120,28,28,0.88));
@@ -1131,7 +1138,7 @@ body::after{
    ========================================================================= */
 
 const VERSION = 1;
-const BUILD = 'B23 · LEGIBILITY';  // visible on title; read it back to confirm you're current
+const BUILD = 'B24 · THE SHADOW DECK';  // visible on title; read it back to confirm you're current
 const SAVE_KEY = 'tarot-run-v1';
 
 /* ----- SEEDABLE RNG ----- */
@@ -1367,6 +1374,93 @@ for(const suit of ['wands','cups','swords','pents']){
     MINOR_CARDS.push(SUIT_FACTORIES[suit](n));
   }
 }
+
+/* ===== B24 · THE SHADOW DECK =====================================
+   Every Minor now has a true REVERSED face — not "cheaper/weaker"
+   (that was B15's stopgap) but its INVERTED role in the suit engine,
+   at the same power & cost. ONE rule the player learns: a reversed
+   card does the OTHER half of its suit's combo.
+     Wands  : striker  ⇄  Ember-layer / detonator
+     Cups   : healer   ⇄  Ward-wall / heal→fist
+     Swords : pierce   ⇄  debuff-layer / debuff-cash
+     Pents  : wall     ⇄  fist
+   Engine already routes card.reversedPlay/reversedDesc (playCard);
+   authoring them here, data-driven, keeps it reviewable & balanced.
+   Effects still get chain/study bonuses (set on ctx before the call).
+================================================================= */
+const _dd=(c,n)=>dealDamage(c,n), _dp=(c,n)=>dealPierce(c,n), _gb=(c,n)=>gainBlock(c,n),
+      _hp=(c,n)=>healPlayer(c,n), _bn=(c,n)=>applyBurn(c,n),
+      _bf=(c,k,n)=>applyBuff(c,k,n), _df=(c,k,n)=>applyDebuff(c,k,n), _dr=(c,n)=>drawCards(c,n);
+const _ember = c => (c.enemy.debuffs.burn||0);
+const _debs  = c => Object.entries(c.enemy.debuffs).filter(([k,v])=>v>0&&k!=='strength').length;
+const _ward  = c => (c.player.buffs.ward||0);
+const _healed= c => (c.combat&&c.combat.healedThisCombat||0);
+const REVERSED_MINORS = {
+  // ---- WANDS: strike ⇄ lay/detonate Ember ----
+  'wands-1':['Apply 2 Ember.', c=>_bn(c,2)],
+  'wands-2':['Apply 2 Ember. Strike 1.', c=>combine(_bn(c,2),_dd(c,1))],
+  'wands-3':['Apply 3 Ember.', c=>_bn(c,3)],
+  'wands-4':['Apply 3 Ember.', c=>_bn(c,3)],
+  'wands-5':['Apply 2 Ember. If the enemy burns, draw 1.', c=>{const r=_bn(c,2);return _ember(c)>0?combine(r,_dr(c,1)):r;}],
+  'wands-6':['Strike 9. Consume 1 Ember.', c=>{if(c.enemy.debuffs.burn)c.enemy.debuffs.burn=Math.max(0,c.enemy.debuffs.burn-1);return _dd(c,9);}],
+  'wands-7':['Consume all Ember. Strike 4 + 4 per Ember.', c=>{const e=_ember(c);c.enemy.debuffs.burn=0;return _dd(c,4+4*e);}],
+  'wands-8':['Apply 4 Ember.', c=>_bn(c,4)],
+  'wands-9':['Apply 5 Ember.', c=>_bn(c,5)],
+  'wands-10':['Strike 8. Apply 6 Ember.', c=>combine(_dd(c,8),_bn(c,6))],
+  'wands-11':['Apply 2 Ember. Draw 1.', c=>combine(_bn(c,2),_dr(c,1))],
+  'wands-12':['Apply 3 Ember. If enemy at full HP, +2 Ember.', c=>_bn(c, c.enemy.hp>=c.enemy.maxHp?5:3)],
+  'wands-13':['Apply 4 Burn.', c=>_bn(c,4)],
+  'wands-14':['Consume all Ember: Strike 6 per Ember. Gain 1 energy.', c=>{const e=_ember(c);c.enemy.debuffs.burn=0;c.player.energy+=1;return combine(_dd(c,6*e),{energyGained:1});}],
+  // ---- CUPS: heal ⇄ Ward-wall / heal→fist ----
+  'cups-1':['Gain 3 Ward.', c=>_bf(c,'ward',3)],
+  'cups-2':['Gain 4 Ward.', c=>_bf(c,'ward',4)],
+  'cups-3':['Gain 5 Ward.', c=>_bf(c,'ward',5)],
+  'cups-4':['Gain 7 Ward.', c=>_bf(c,'ward',7)],
+  'cups-5':['Heal 2. Gain 6 Ward.', c=>combine(_hp(c,2),_bf(c,'ward',6))],
+  'cups-6':['Gain 5 Ward. Strike equal to a third of your Ward.', c=>{const r=_bf(c,'ward',5);return combine(r,_dd(c,Math.floor(_ward(c)/3)));}],
+  'cups-7':['Gain 5 Ward. Draw 1.', c=>combine(_bf(c,'ward',5),_dr(c,1))],
+  'cups-8':['Heal 8. Draw 1.', c=>combine(_hp(c,8),_dr(c,1))],
+  'cups-9':['Heal 10.', c=>_hp(c,10)],
+  'cups-10':['Gain 12 Ward, then Strike equal to half your Ward.', c=>{const r=_bf(c,'ward',12);return combine(r,_dd(c,Math.floor(_ward(c)/2)));}],
+  'cups-11':['Heal 4. Gain 4 Ward.', c=>combine(_hp(c,4),_bf(c,'ward',4))],
+  'cups-12':['Strike equal to a third of HP healed this combat (min 4).', c=>_dd(c,Math.max(4,Math.floor(_healed(c)/3)))],
+  'cups-13':['Gain 14 Ward.', c=>_bf(c,'ward',14)],
+  'cups-14':['Strike equal to half HP healed this combat (min 6). Draw 2.', c=>combine(_dd(c,Math.max(6,Math.floor(_healed(c)/2))),_dr(c,2))],
+  // ---- SWORDS: pierce ⇄ apply debuffs / cash debuffs ----
+  'swords-1':['Apply Weak 1.', c=>_df(c,'weak',1)],
+  'swords-2':['Apply Vulnerable 1.', c=>_df(c,'vulnerable',1)],
+  'swords-3':['Apply Weak 1 and Vulnerable 1.', c=>combine(_df(c,'weak',1),_df(c,'vulnerable',1))],
+  'swords-4':['Apply Weak 2.', c=>_df(c,'weak',2)],
+  'swords-5':['Apply Vulnerable 2.', c=>_df(c,'vulnerable',2)],
+  'swords-6':['Apply Vulnerable 1. Pierce 2 per debuff on the enemy.', c=>{const r=_df(c,'vulnerable',1);return combine(r,_dp(c,2*_debs(c)));}],
+  'swords-7':['Apply Weak 1 and Vulnerable 1. Draw 1.', c=>combine(_df(c,'weak',1),_df(c,'vulnerable',1),_dr(c,1))],
+  'swords-8':['Pierce 5 per debuff on the enemy.', c=>_dp(c,5*_debs(c))],
+  'swords-9':['Apply Vulnerable 2 and Weak 1.', c=>combine(_df(c,'vulnerable',2),_df(c,'weak',1))],
+  'swords-10':['Apply Weak 2 and Vulnerable 2.', c=>combine(_df(c,'weak',2),_df(c,'vulnerable',2))],
+  'swords-11':['Apply Weak 2. Draw 1.', c=>combine(_df(c,'weak',2),_dr(c,1))],
+  'swords-12':['Pierce 4. Apply Vulnerable 2.', c=>combine(_dp(c,4),_df(c,'vulnerable',2))],
+  'swords-13':['Apply Vulnerable 2. Pierce 3 per debuff on the enemy.', c=>{const r=_df(c,'vulnerable',2);return combine(r,_dp(c,3*_debs(c)));}],
+  'swords-14':['Apply Weak 2 and Vulnerable 2. Pierce 4 per debuff.', c=>{const r=combine(_df(c,'weak',2),_df(c,'vulnerable',2));return combine(r,_dp(c,4*_debs(c)));}],
+  // ---- PENTS: wall ⇄ fist ----
+  'pents-1':['Strike 4.', c=>_dd(c,4)],
+  'pents-2':['Strike 5.', c=>_dd(c,5)],
+  'pents-3':['Strike 6.', c=>_dd(c,6)],
+  'pents-4':['Strike 6. If you have Block, +3 damage.', c=>_dd(c, c.player.block>0?9:6)],
+  'pents-5':['Strike 7. Block 3.', c=>combine(_dd(c,7),_gb(c,3))],
+  'pents-6':['Strike 5, then Strike equal to a quarter of your Block.', c=>combine(_dd(c,5),_dd(c,Math.floor(c.player.block*0.25)))],
+  'pents-7':['Strike 10. Block 5.', c=>combine(_dd(c,10),_gb(c,5))],
+  'pents-8':['Strike 8. Gain 1 Plate (permanent +2 Block).', c=>combine(_dd(c,8),_bf(c,'plate',1))],
+  'pents-9':['Block 12, then Strike equal to a third of your Block.', c=>{const b=_gb(c,12);return combine(b,_dd(c,Math.floor(c.player.block/3)));}],
+  'pents-10':['Strike equal to half your Block, then Block 8.', c=>{const r=_dd(c,Math.floor(c.player.block/2));return combine(r,_gb(c,8));}],
+  'pents-11':['Strike 7. Gain 5 gold.', c=>{c.player.gold+=5;return combine(_dd(c,7),{goldGained:5});}],
+  'pents-12':['Strike 12.', c=>_dd(c,12)],
+  'pents-13':['Strike 10. Gain 1 Plate (permanent +2 Block).', c=>combine(_dd(c,10),_bf(c,'plate',1))],
+  'pents-14':['Block 6, then Strike equal to your Block.', c=>{const b=_gb(c,6);return combine(b,_dd(c,c.player.block));}],
+};
+MINOR_CARDS.forEach(card => {
+  const rv = REVERSED_MINORS[card.id];
+  if(rv){ card.reversedDesc = rv[0]; card.reversedPlay = rv[1]; }
+});
 
 /* ============ MAJOR ARCANA (22) ============
    Major Arcana are POWERS — special once-per-combat cards.
@@ -3068,16 +3162,20 @@ function showScreen(id){
 function renderCardElement(card, opts = {}){
   const div = document.createElement('div');
   div.className = `card suit-${card.suit}`;
+  // B24 — a reversed card shows its SHADOW face (different effect text).
+  const showShadow = (opts.reversed || opts.shadow) && card.reversedPlay;
   if(opts.reversed) div.classList.add('reversed');
+  if(showShadow) div.classList.add('shadow');
   if(opts.studied) div.classList.add('studied');
   div.dataset.cardId = card.id;
   const cost = card.cost;
+  const bodyDesc = showShadow ? card.reversedDesc : card.desc;
   div.innerHTML = `
     <div class="card-cost">${cost}</div>
     ${card.suit !== 'major' ? `<div class="card-pips">${numToRoman(card.arcanaNum) || card.arcanaNum}</div>` : `<div class="card-pips">${card.arcanaNum}</div>`}
     <div class="card-art placeholder" data-glyph="${card.glyph}" data-art-slot="card-${card.id}"></div>
     <div class="card-name">${card.name}</div>
-    <div class="card-desc">${card.desc}</div>
+    <div class="card-desc">${bodyDesc}</div>
     <div class="card-suit-mark">${SUIT_GLYPH[card.suit]}</div>
   `;
   return div;
@@ -3090,10 +3188,18 @@ function renderHand(){
   ctx.player.hand.forEach((entry, idx) => {
     const card = CARD_BY_ID[entry.cardId];
     const isMinor = card.suit==='wands'||card.suit==='cups'||card.suit==='swords'||card.suit==='pents';
-    const fateRev = isMinor && entry.reversed;
-    // Hand stays READABLE (no 180° flip here) — fate is shown as a ribbon.
-    const el = renderCardElement(card, { reversed: false });
-    if(fateRev){
+    // B24 — a reversed Minor with an authored face is its SHADOW (a
+    // real different effect, full cost). Legacy fate path (no authored
+    // face: curses etc.) keeps B15's −1 cost / weaker behaviour.
+    const hasShadow = isMinor && entry.reversed && !!card.reversedPlay;
+    const fateRev   = isMinor && entry.reversed && !card.reversedPlay;
+    // Hand stays READABLE (no 180° flip) — the face is shown by a ribbon.
+    const el = renderCardElement(card, { reversed: false, shadow: hasShadow });
+    if(hasShadow){
+      el.classList.add('shadow');
+      const rib = document.createElement('div'); rib.className = 'fate-ribbon shadow-ribbon'; rib.textContent = '↻ SHADOW';
+      el.appendChild(rib);
+    } else if(fateRev){
       el.classList.add('fate-rev');
       const rib = document.createElement('div'); rib.className = 'fate-ribbon'; rib.textContent = '↻ REVERSED';
       el.appendChild(rib);
@@ -3105,11 +3211,12 @@ function renderHand(){
     if(state.run.relics.includes('ribbon-of-fate') && ctx.combat.cardsPlayedThisTurn === 0) effectiveCost = 0;
     if(state.run.relics.includes('ace-of-aces') && card.arcanaNum === 1 && card.suit !== 'major') effectiveCost = 0;
     effectiveCost = Math.max(0, effectiveCost);
-    if(fateRev) effectiveCost = Math.max(0, effectiveCost - 1);   // fate's discount
+    if(fateRev) effectiveCost = Math.max(0, effectiveCost - 1);   // legacy fate discount only
     const costEl = el.querySelector('.card-cost');
     costEl.textContent = effectiveCost;
     if(chainTax > 0 && effectiveCost > 0){ costEl.classList.add('cost-taxed'); costEl.title = `+${chainTax} chain tax`; }
     if(fateRev){ costEl.classList.add('cost-fate'); costEl.title = 'Reversed — cheaper, but weaker'; }
+    else if(hasShadow){ costEl.title = 'Shadow face — a different effect, same cost'; }
     const playable = ctx.player.energy >= effectiveCost && !(card.suit === 'major' && ctx.combat.currentMajorCast);
     el.classList.add(playable ? 'playable' : 'unplayable');
     el.onclick = () => { if(playable) playCard(idx); };
@@ -3598,13 +3705,21 @@ function showCardInspect(card, entry){
   const content = document.getElementById('card-inspect-content');
   const info = document.getElementById('card-inspect-info');
   content.innerHTML = '';
-  const big = renderCardElement(card, { reversed: entry && entry.reversed });
-  content.appendChild(big);
   const isMinor = card.suit==='wands'||card.suit==='cups'||card.suit==='swords'||card.suit==='pents';
-  const fateRev = isMinor && entry && entry.reversed;
-  const fateLine = fateRev
-    ? `<br><small style="color:var(--blood-bright)">↻ REVERSED — costs 1 less, effect ×${fateMultFor().toFixed(2)}</small>`
-    : '';
+  const revHere = !!(entry && entry.reversed);
+  const hasShadow = isMinor && revHere && !!card.reversedPlay;
+  const fateRev   = isMinor && revHere && !card.reversedPlay;
+  const big = renderCardElement(card, { reversed: revHere && !hasShadow, shadow: hasShadow });
+  content.appendChild(big);
+  // B24 — show BOTH faces so the player learns the upright⇄shadow fork.
+  let fateLine = '';
+  if(card.reversedPlay){
+    fateLine = hasShadow
+      ? `<br><small style="color:var(--blood-bright)">↻ SHADOW (drawn reversed): ${card.reversedDesc}</small><br><small style="color:var(--card-cream-dim)">Upright: ${card.desc}</small>`
+      : `<br><small style="color:var(--card-cream-dim)">↻ Shadow face (if reversed): ${card.reversedDesc}</small>`;
+  } else if(fateRev){
+    fateLine = `<br><small style="color:var(--blood-bright)">↻ REVERSED — costs 1 less, effect ×${fateMultFor().toFixed(2)}</small>`;
+  }
   info.innerHTML = `<em>${card.flavor || ''}</em>${fateLine}`;
   // In-combat hand actions: Patron Channel + the Priestess's Turn of Fate
   const inCombat = state.run && state.run.combat && state.run.combatPlayer;
