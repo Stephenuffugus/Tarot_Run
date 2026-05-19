@@ -953,7 +953,7 @@ body::after{
    ========================================================================= */
 
 const VERSION = 1;
-const BUILD = 'B11 · THE WEB';  // visible on title; read it back to confirm you're current
+const BUILD = 'B12 · THE OPENING';  // visible on title; read it back to confirm you're current
 const SAVE_KEY = 'tarot-run-v1';
 
 /* ----- SEEDABLE RNG ----- */
@@ -1090,10 +1090,10 @@ const SUIT_FACTORIES = {
       play(ctx){ return combine(healPlayer(ctx,5), drawCards(ctx,1)); } };
     if(n === 8) return { ...base, cost:2, desc:'Heal 4. Gain 5 Ward. Draw 1.', flavor:'Seven faces, one will.',
       play(ctx){ return combine(healPlayer(ctx,4), applyBuff(ctx,'ward',5), drawCards(ctx,1)); } };
-    if(n === 9) return { ...base, cost:2, desc:'Heal 6. If you have healed 12+ this combat, Strike 8.', flavor:'The wish, paid forward as a wound.',
-      play(ctx){ const r = healPlayer(ctx,6); return ((ctx.combat&&ctx.combat.healedThisCombat||0) >= 12) ? combine(r, dealDamage(ctx,8)) : r; } };
-    if(n === 10) return { ...base, cost:2, desc:'Heal 8, then Strike equal to half the HP you have healed this combat (max 12).', flavor:'The flood remembers every shore.',
-      play(ctx){ const r = healPlayer(ctx,8); const dmg = Math.min(12, Math.floor((ctx.combat&&ctx.combat.healedThisCombat||0)/2)); return combine(r, dealDamage(ctx,dmg)); } };
+    if(n === 9) return { ...base, cost:2, desc:'Heal 6, then Strike 6 if you have healed 6+ this combat.', flavor:'The wish, paid forward as a wound.',
+      play(ctx){ const r = healPlayer(ctx,6); return ((ctx.combat&&ctx.combat.healedThisCombat||0) >= 6) ? combine(r, dealDamage(ctx,6)) : r; } };
+    if(n === 10) return { ...base, cost:2, desc:'Heal 8, then Strike equal to half the HP healed this combat + half your Ward (max 14).', flavor:'The flood remembers every shore.',
+      play(ctx){ const r = healPlayer(ctx,8); const dmg = Math.min(14, Math.floor((ctx.combat&&ctx.combat.healedThisCombat||0)/2) + Math.floor((ctx.player.buffs.ward||0)/2)); return combine(r, dealDamage(ctx,dmg)); } };
     if(n === 11) return { ...base, cost: 0, desc: 'Draw 2.', flavor: 'The young one offers a wave.',
       play(ctx){ return drawCards(ctx, 2); } };
     if(n === 12) return { ...base, cost: 1, desc: 'Heal 6. Gain Resolve (+block at turn end).', flavor: 'A knight returns from drowning.',
@@ -1604,14 +1604,16 @@ const PATRON_DECKS = {
   swords:['swords-1','swords-1','swords-2','swords-3','swords-4','swords-5',
           'swords-6','swords-7','swords-3','wands-2','wands-4','cups-2',
           'cups-1','pents-2','pents-1','major-0'],
-  // Empress — sustain that blooms: heal, build Ward, turn it into damage.
+  // Empress — sustain that BLOOMS: heal & Ward, then convert it to a kill.
+  // (Had no closer; added wands-4 Ember + cups-10 finisher + swords-5 Vuln.)
   cups:  ['cups-1','cups-1','cups-2','cups-3','cups-4','cups-5','cups-6',
-          'cups-9','cups-3','pents-4','pents-2','pents-1','swords-2',
+          'cups-9','cups-10','pents-4','pents-2','swords-5','wands-4',
           'wands-2','wands-1','major-0'],
-  // Emperor — the wall punches: bank Block, then spend it as a fist.
+  // Emperor — the wall PUNCHES, and sooner: pents-7 (Blk10+Str5) +
+  // wands-4 give a reachable opening; pents-9 still the haymaker.
   pents: ['pents-1','pents-1','pents-2','pents-3','pents-4','pents-5','pents-6',
-          'pents-9','pents-3','swords-5','swords-2','cups-2','cups-1',
-          'wands-2','wands-1','major-0'],
+          'pents-7','pents-9','swords-5','swords-2','cups-2','cups-1',
+          'wands-4','wands-2','major-0'],
 };
 function buildPatronDeck(primary){
   const ids = PATRON_DECKS[primary] || PATRON_DECKS.wands;
