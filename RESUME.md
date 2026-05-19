@@ -2,7 +2,7 @@
 
 When the user says "lets get started", read this first.
 
-## Where things are (as of B15 · THE TURN OF FATE — visible bendable reversal shipped)
+## Where things are (as of B16 · HAND & HEX — hand scroll + debuff-duration fix)
 
 - **Live game (PERMANENT): https://stephenuffugus.github.io/Tarot_Run/**
   - GitHub Pages, "Deploy from a branch" = `setup/project-structure` root.
@@ -92,7 +92,29 @@ When the user says "lets get started", read this first.
    ribbon + discounted cost); inspect shows the rule. NOTE: Fortune
    Dice (opt-in push-luck) & Criteria Gates remain on the table.
 
-## THE OPEN QUESTION — next playtest verdict (post B10–B15)
+15. **B16 · HAND & HEX** — (a) big hand spilled off-screen (broken
+   `gap:-30px`, centered, no overflow) → `.hand` now horizontal-scrolls
+   (touch+snap+thin bar, real gap, headroom for the lifted card,
+   `safe center`). (b) Enemy Weak/Vulnerable are PRESENCE-based; their
+   amount is purely a 1/turn-decay DURATION — applied at 1 they died
+   before the player's next turn, so the Swords set-up→pay-off (whole
+   B11 debuff web) was impossible across turns. `applyDebuff` now gives
+   weak/vulnerable +1 duration (single chokepoint; burn untouched).
+
+## NEXT — the Reading (Past/Present/Future) rework, awaiting user pick
+User: "don't understand what Past/Present/Future does, what's the
+point" + sees potential for "a little rng / deep strategy / rock-
+paper-scissors bonus". CURRENT: 3 random Majors face-down; tap → pay
+1 energy (0 if Cut=Sun) → that Major enters hand as a one-shot. The
+P/P/F labels are pure flavour — mechanically identical, no strategy,
+misleading. Long-flagged "Reading-as-decision" rework. Options put to
+the user (previews): (1) **The Prophecy** — foretold suit *sequence*;
+fulfil it in order this combat → big payoff [recommended: deepest,
+on-theme, reuses suits/Chain]; (2) **Omen Counter** — RPS vs the
+enemy's intent nature; (3) **Phased Spread** — make P/P/F concretely
+different (free-now / pay-now / auto-future) + full-set bonus.
+
+## THE OPEN QUESTION — next playtest verdict (post B10–B16)
 
 Both confirmed needs from the 2026-05-19 verdict are now SHIPPED:
 A (active skill) = B10 The Cut; B (strategy depth) = B11 The Web +
