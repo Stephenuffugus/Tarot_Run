@@ -2,7 +2,7 @@
 
 When the user says "lets get started", read this first.
 
-## Where things are (as of B22 · THE ASCENT — the run is 3 escalating acts)
+## Where things are (as of B23 · LEGIBILITY — hand-reset & map now communicate state)
 
 - **Live game (PERMANENT): https://stephenuffugus.github.io/Tarot_Run/**
   - GitHub Pages, "Deploy from a branch" = `setup/project-structure` root.
@@ -222,7 +222,36 @@ Awaiting the user's felt verdict on:
    distinct bosses, scaledHit(base10) 8→11→13, final ~232 HP,
    victory only after act 3, state carries. Zero regression.
 
-## Awaiting felt verdict (B19–B22)
+22. **B23 · LEGIBILITY** — two playtest complaints, same root (the
+   game wasn't communicating state). (1) "Cards disappear / new hand /
+   that sucks / no animation": the STS hand-reset is intentional &
+   load-bearing — made it VISIBLE not removed. snapshotHand() clones
+   the hand BEFORE endTurn() wipes it → sweepHandToDiscard() flies
+   them to the discard pile → dealInHand() fans the new hand in;
+   one-time explainer modal (state.meta.taughtHandReset); End Turn
+   reads "↻ discards N". All endTurnWithFX/helpers — UI-only,
+   rAF-gated, endTurn() untouched. (2) "Map won looks like unvisited":
+   was completed 0.38 vs locked 0.22 opacity, no marker, .current was
+   dead CSS. Now BEHIND = small/grayscale/✓, HERE = big/bright/glow +
+   "▸ you are here", AHEAD = cool-dim/no-✓. Zero regression.
+
+## NEXT (user steer pending): card + combo DIVERSITY
+
+Playtest verdict (Magician, act 1): "felt okay, getting boring by the
+end, I could do it easily. We need more diversity in cards and the way
+cards combo. There has to be a unique and elegant way to expand
+WITHOUT making it super confusing." Note: user only played ACT 1 —
+acts 2/3 escalate (B22) but the *variety* ceiling is the real ask.
+Strongest elegant lever (memory-noted, code hooks already exist):
+**make Reversed a true alternate card face** (B15 Turn of Fate only
+made it −1 cost/×weaker; `reversedDesc`/`reversedPlay` hooks + the
+`.card.reversed` rotate already exist) — doubles the design space &
+changes combos by orientation with ~zero new rules, fully tarot-
+native. Alts: cross-suit named Resonances / card upgrades
+(Illumination) / Major-Arcana run modifiers. Present as a steer
+question, recommend Reversed-as-face, then build the pick.
+
+## Awaiting felt verdict (B19–B23)
 
 - **B22**: do the 3 acts feel like real progression? Is the
   escalation curve right (act 2/3 enemies — too soft / brutal)? Are
