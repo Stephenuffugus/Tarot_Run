@@ -602,11 +602,21 @@ body::after{
   flex-shrink: 0;
 }
 .hand{
-  display:flex; gap:-30px;
-  justify-content:center; align-items:flex-end;
+  display:flex; gap: 6px;
+  justify-content: safe center; align-items:flex-end;
   position: relative;
   min-height: 170px;
+  /* B16 — a big hand now scrolls instead of spilling off-screen */
+  overflow-x: auto; overflow-y: hidden;
+  padding: 24px 12px 6px;            /* headroom so the lifted card isn't clipped */
+  -webkit-overflow-scrolling: touch;
+  scroll-snap-type: x proximity;
+  scrollbar-width: thin;
 }
+.hand > .card{ flex: 0 0 auto; scroll-snap-align: center; }
+.hand::-webkit-scrollbar{ height: 5px; }
+.hand::-webkit-scrollbar-thumb{ background: rgba(212,165,116,0.45); border-radius: 3px; }
+.hand::-webkit-scrollbar-track{ background: transparent; }
 .card{
   width: 92px; min-width: 92px;
   height: 138px;
@@ -1019,7 +1029,7 @@ body::after{
    ========================================================================= */
 
 const VERSION = 1;
-const BUILD = 'B15 · THE TURN OF FATE';  // visible on title; read it back to confirm you're current
+const BUILD = 'B16 · HAND & HEX';  // visible on title; read it back to confirm you're current
 const SAVE_KEY = 'tarot-run-v1';
 
 /* ----- SEEDABLE RNG ----- */
@@ -1514,7 +1524,13 @@ function applyBuff(ctx, key, amount){
   return { buff: key };
 }
 function applyDebuff(ctx, key, amount){
-  ctx.enemy.debuffs[key] = (ctx.enemy.debuffs[key]||0) + amount;
+  // Weak/Vulnerable are PRESENCE-based (any >0 = full effect); their
+  // "amount" is really a DURATION that decays 1/turn. At 1 they vanished
+  // before you could ever exploit them next turn — which silently broke
+  // the Swords set-up→pay-off fantasy. +1 duration: live through your
+  // NEXT turn so a debuff you apply is a debuff you can cash in.
+  const dur = (key === 'weak' || key === 'vulnerable') ? amount + 1 : amount;
+  ctx.enemy.debuffs[key] = (ctx.enemy.debuffs[key]||0) + dur;
   return { debuff: key };
 }
 function applyBurn(ctx, stacks){
