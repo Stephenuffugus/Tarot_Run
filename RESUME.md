@@ -2,7 +2,7 @@
 
 When the user says "lets get started", read this first.
 
-## Where things are (as of B12 · THE OPENING — hosting solved, skill + synergy + Patron-balance shipped)
+## Where things are (as of B13 · THE CHANNEL — hosting + skill + synergy + Patron-balance + dead-hand fix shipped)
 
 - **Live game (PERMANENT): https://stephenuffugus.github.io/Tarot_Run/**
   - GitHub Pages, "Deploy from a branch" = `setup/project-structure` root.
@@ -61,7 +61,19 @@ When the user says "lets get started", read this first.
    engine reachability 0.83→1.21 fires/fight. Bot win% is bot-capped
    by design — NOT the signal; the engine-reachability delta is.
 
-## THE OPEN QUESTION — next playtest verdict (post B10–B12)
+12. **B13 · THE CHANNEL** — playtest found the "dead hand" problem
+   (combos are conditional → off-combo cards feel like bricks; sim
+   agreed: only ~1.2 payoffs/fight so most cards aren't the combo).
+   Patron Channel: long-press a card → "Channel" feeds it to your
+   Patron 1×/turn instead of playing it — Magician +1 energy,
+   Priestess draw 1, Empress Heal4+3 Ward, Emperor Block6 (+Plate
+   every 3rd fed). Differs per Patron so leftovers also play
+   differently. Card→discard, no energy, 1×/turn. UI-only
+   (`channelCard` from inspect modal); state defaults inert →
+   engine/tests untouched. (User picked this over Bank / Signature
+   Abilities — those remain on the table as later variants.)
+
+## THE OPEN QUESTION — next playtest verdict (post B10–B13)
 
 Both confirmed needs from the 2026-05-19 verdict are now SHIPPED:
 A (active skill) = B10 The Cut; B (strategy depth) = B11 The Web +
