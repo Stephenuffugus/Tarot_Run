@@ -2,7 +2,7 @@
 
 When the user says "lets get started", read this first.
 
-## Where things are (as of B19 · THE GUARD SHATTERS — banish fixed + player-side juice)
+## Where things are (as of B20 · THE MERCHANT — gold has a sink)
 
 - **Live game (PERMANENT): https://stephenuffugus.github.io/Tarot_Run/**
   - GitHub Pages, "Deploy from a branch" = `setup/project-structure` root.
@@ -167,18 +167,30 @@ Awaiting the user's felt verdict on:
    off-suit splash that seeds its engine. If one feels weak/strong,
    adjust that deck's list in `PATRON_DECKS` (no test asserts contents).
 
-## NEXT (committed): B20 · THE MERCHANT
+19. **B20 · THE MERCHANT** — gold's sink (user picked full Merchant
+   node over lean-nodes / combat-resource / scrap). New `merchant`
+   map node + `showMerchantModal()`: 3-card floor-tier stock
+   (`SHOP_PRICE` common40/uncommon60/rare90, a by-feel dial), 1
+   undiscovered relic (130), banish-for-◈50 (no HP — coin not blood;
+   reuses deck grid + destroy anim, pay-on-commit, can't empty deck),
+   heal 35% maxHP for ◈45 (off when whole). Stock+sold-state live in
+   the function CLOSURE — no run/state field → no VERSION bump, no
+   migrateMeta touch. Only "Leave" advances the floor; purchases
+   re-render in place. Map gen: floors 6 & 11 = Merchant-vs-Rest
+   CHOICE (shop or heal), + ~6% in the random pool; verified 400
+   seeds (floor-6 400/400, ~2.67/run). Glyph ⚖.
 
-User picked **full Merchant node** for the gold sink (over lean-into-
-existing-nodes / combat resource / scrap gold). Scope: a new map node
-type + shop screen — buy a card from a rotating stock (3 priced
-slots), pay gold to banish a card (no HP cost, reuses the now-fixed
-banish grid), buy a relic, buy a heal. STS/Hades model. Gold currently
-accrues from combat (+10+floor*1.5), chests, skip-offering, Page of
-Pents, two-of-coins relic, Mirror fortune — and has ~no sink. Don't
-bump `VERSION` (discards runs); add meta defensively via
-`migrateMeta()`. Place the node in the map generator; keep engine/
-tests green; ship + tell the user what to feel for.
+## Awaiting felt verdict (B19 + B20)
+
+- **B19**: banish opens cleanly now? The shield-shatter — lands, too
+  much, too little? Combat read less "curt" (heal/block off YOUR HUD,
+  numbers pulse)?
+- **B20**: do the Merchant prices feel right vs your gold income?
+  (`SHOP_PRICE` is the single dial — flat, no floor-scaling yet.)
+  Is Merchant-vs-Rest a tense choice or an obvious pick? Stock
+  variety good? Banish-for-coin worth it vs the HP Hermit's Bargain?
+  → routes to: tune `SHOP_PRICE` / add floor-scaling / change node
+  frequency / adjust stock pool.
 
 ## Likely next increments (let the user steer)
 
