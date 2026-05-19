@@ -320,7 +320,7 @@ body::after{
   margin: 4px 0 8px;
 }
 .reading-card{
-  width: 44px; height: 64px;
+  width: 60px; height: 72px;
   border-radius: 4px;
   background: linear-gradient(160deg, var(--ink-black), var(--velvet));
   border: 1px solid var(--ornament-deep);
@@ -349,7 +349,11 @@ body::after{
   content: '✦'; position:absolute; top:2px; right:3px; font-size:8px; color: var(--ornament-gold);
 }
 /* B17 — The Prophecy: Past/Present/Future as a foretold suit sequence */
-.reading-card .rd-glyph{ font-family: var(--font-display); font-size: 22px; line-height: 1; }
+.reading-card .rd-glyph{ font-family: var(--font-display); font-size: 20px; line-height: 1; }
+.reading-card .rd-suit{
+  font-family: var(--font-display); font-size: 8px; letter-spacing: 0.04em;
+  text-transform: uppercase; margin-top: 2px; opacity: 0.9; white-space: nowrap;
+}
 .reading-card.pf-wait{ opacity: 0.42; }
 .reading-card.pf-active{
   border-color: var(--ornament-gold); color: var(--ornament-gold);
@@ -1048,7 +1052,7 @@ body::after{
    ========================================================================= */
 
 const VERSION = 1;
-const BUILD = 'B17 · THE PROPHECY';  // visible on title; read it back to confirm you're current
+const BUILD = 'B18 · PROPHECY READABLE';  // visible on title; read it back to confirm you're current
 const SAVE_KEY = 'tarot-run-v1';
 
 /* ----- SEEDABLE RNG ----- */
@@ -2002,15 +2006,19 @@ function playCard(handIdx){
   if(MINOR && !ctx.combat.prophecyDone &&
      ctx.combat.reading[ctx.combat.prophecyProgress] === card.suit){
     ctx.combat.prophecyProgress += 1;
+    const _pb = document.getElementById('aspect-banner');
     if(ctx.combat.prophecyProgress >= 3){
       ctx.combat.prophecyDone = true;
       healPlayer(ctx, 12);
       dealDamage(ctx, 12);
       ctx.player.maxEnergy += 1;
       ctx.player.energy += 1;
-      const _pb = document.getElementById('aspect-banner');
       if(_pb){ _pb.textContent = '✦ PROPHECY FULFILLED ✦';
         _pb.classList.remove('show'); void _pb.offsetWidth; _pb.classList.add('show'); }
+    } else if(_pb){
+      const _pos = ['Past','Present','Future'][ctx.combat.prophecyProgress - 1] || '';
+      _pb.textContent = `THE READING · ${_pos} foretold ✦`;
+      _pb.classList.remove('show'); void _pb.offsetWidth; _pb.classList.add('show');
     }
   }
 
@@ -2513,6 +2521,16 @@ function showModal({ title, sub, body, choices, hideClose }){
     b.onclick = () => { veil.classList.remove('active'); if(ch.onClick) ch.onClick(); };
     choiceEl.appendChild(b);
   });
+  // SAFETY: a modal with no choices was a soft-lock (no way to close).
+  // Always give an informational modal a Continue button unless the
+  // caller explicitly forces a choice via hideClose + its own choices.
+  if(choiceEl.children.length === 0 && !hideClose){
+    const b = document.createElement('div');
+    b.className = 'modal-choice';
+    b.innerHTML = `<div class="mc-icon">✦</div><div class="mc-text"><strong>Continue</strong></div>`;
+    b.onclick = () => { veil.classList.remove('active'); };
+    choiceEl.appendChild(b);
+  }
   veil.classList.add('active');
 }
 
@@ -2919,9 +2937,13 @@ function renderReadingStrip(){
   ['Past', 'Present', 'Future'].forEach((pos, i) => {
     const suit = ctx.combat.reading[i];
     const stateCls = (done || i < prog) ? 'pf-done' : (i === prog ? 'pf-active' : 'pf-wait');
+    const mark = (done || i < prog) ? '✔ ' : (i === prog ? '▶ ' : '');
     const el = document.createElement('div');
     el.className = 'reading-card ' + stateCls;
-    el.innerHTML = `<div class="rd-glyph">${SUIT_GLYPH[suit] || '✦'}</div><div class="rd-pos">${pos}</div>`;
+    el.innerHTML =
+      `<div class="rd-glyph">${SUIT_GLYPH[suit] || '✦'}</div>` +
+      `<div class="rd-suit">${SUIT_NAME[suit] || suit}</div>` +
+      `<div class="rd-pos">${mark}${pos}</div>`;
     el.onclick = () => {
       const seq = ctx.combat.reading.map(s => SUIT_NAME[s] || s).join('  →  ');
       showModal({
