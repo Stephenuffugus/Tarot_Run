@@ -1096,7 +1096,7 @@ body::after{
    ========================================================================= */
 
 const VERSION = 1;
-const BUILD = 'B21 · REWARD THE ENGINE';  // visible on title; read it back to confirm you're current
+const BUILD = 'B22 · THE ASCENT';  // visible on title; read it back to confirm you're current
 const SAVE_KEY = 'tarot-run-v1';
 
 /* ----- SEEDABLE RNG ----- */
@@ -1656,8 +1656,37 @@ const ENEMIES = [
       {type:'attack', value:11, buff:{key:'strength',value:3}, desc:'Don the crown'},
       {type:'attack', value:22, desc:'Coronation strike'},
     ] },
+
+  // B22 — act bosses. Each act ends in a DIFFERENT wall (the player's
+  // complaint was facing the same boss again). Base HP escalates; the
+  // global act-depth scaling hardens them further the deeper you climb.
+  { id:'hanged-king', name:'The Hanged King', tier:4, hp:95, glyph:'⚰', boss:true,
+    intents:[
+      {type:'attack', value:14, desc:'Pendulum'},
+      {type:'attack', value:7, count:2, desc:'Twin drop'},
+      {type:'attack', value:9, debuff:{key:'weak',value:2}, desc:'Slow sway'},
+      {type:'attack', value:8, selfBlock:12, desc:'Hang in iron'},
+      {type:'attack', value:19, desc:'The gallows'},
+    ] },
+  { id:'glass-magus', name:'The Glass Magus', tier:4, hp:128, glyph:'☵', boss:true,
+    intents:[
+      {type:'attack', value:18, desc:'Refraction'},
+      {type:'attack', value:10, count:2, desc:'Split image'},
+      {type:'attack', value:11, debuff:{key:'vulnerable',value:2}, desc:'Hairline crack'},
+      {type:'attack', value:9, special:'copy_block', desc:'Mirror your guard'},
+      {type:'attack', value:25, desc:'Shatter'},
+    ] },
 ];
 const ENEMY_BY_ID = {}; ENEMIES.forEach(e => ENEMY_BY_ID[e.id] = e);
+
+// B22 · THE ASCENT — a run is now multiple escalating acts, each a
+// fresh 15-floor map ending in its OWN boss. Data-driven: append here
+// to add act 4, 5, … Difficulty climbs continuously via globalDepth().
+const ACTS = [
+  { name:'The Undercroft',        bossId:'hanged-king' },
+  { name:'The Gallery of Mirrors', bossId:'glass-magus' },
+  { name:'The Crown',             bossId:'crown'       },
+];
 
 /* =====================================================================
    4. RELICS  (~15)
@@ -1809,8 +1838,8 @@ function freshRun(seedStr, patronId){
   const seed = strHash(seedStr || ('run-' + Date.now()));
   const rng = mulberry32(seed);
 
-  // Generate path: 15 floors with branching encounters
-  const path = generatePath(rng);
+  // Generate path: act 1's 15 floors (later acts regen via enterNextAct)
+  const path = generatePath(rng, 1);
 
   const patron = PATRONS[patronId] || PATRONS.magician;
   const deck = buildPatronDeck(patron.primary);
@@ -1820,6 +1849,7 @@ function freshRun(seedStr, patronId){
     seed: seedStr, rngSeed: seed,
     patron: patron.id,
     spread: [],          // claimed Arcana boon ids (persistent run passives)
+    act: 1,              // B22 — which of ACTS we're climbing (1-based)
     floor: 0,
     hp: 60 + mirrorBonusMaxHp(), maxHp: 60 + mirrorBonusMaxHp(),
     gold: mirrorBonusGold(),
@@ -1831,14 +1861,14 @@ function freshRun(seedStr, patronId){
   };
 }
 
-function generatePath(rng){
-  // 15 floors. Floor 0 is start, 14 is boss.
-  // Each floor has 1-2 nodes to choose from.
-  // Floor types weighted by depth.
+function generatePath(rng, act){
+  // 15 floors. Floor 0 is start, 14 is boss. The boss is THIS act's boss.
+  // Each floor has 1-2 nodes to choose from. Floor types weighted by depth.
+  const bossId = (ACTS[((act||1)-1)] || ACTS[0]).bossId;
   const floors = [];
   for(let i=0;i<15;i++){
     let nodes;
-    if(i === 14) nodes = [{ type:'boss', enemyId:'crown' }];
+    if(i === 14) nodes = [{ type:'boss', enemyId: bossId }];
     else if(i === 0) nodes = [{ type:'combat', enemyId: pickRand(ENEMIES.filter(e=>e.tier===1).map(e=>e.id), rng) }];
     else if(i === 4 || i === 9) nodes = [{ type:'treasure' }];
     else if(i === 6 || i === 11) nodes = [{ type:'merchant' }, { type:'rest' }];  // B20 — shop vs heal: a real choice
@@ -1947,7 +1977,7 @@ function startCombat(enemyId){
   if(mirrorBonusWard() > 0) player.buffs.ward = (player.buffs.ward || 0) + mirrorBonusWard();
 
   const enemy = {
-    hp: enemyDef.hp + Math.floor(run.floor * 1.2),
+    hp: enemyDef.hp + Math.floor(globalDepth() * 1.2),
     maxHp: 0,
     block: 0,
     debuffs: {},
@@ -2360,11 +2390,19 @@ function decayStatus(map){
 const ENEMY_DMG_MULT   = 0.62;  // 1.0 = raw intent table; global threat dial
 const ENEMY_FLOOR_SCALE = 0.25; // bonus damage per floor climbed
 
+// B22 — difficulty climbs CONTINUOUSLY across acts. Act 2 floor 0 is
+// as hard as act 1's boss-ish depth, and keeps rising. Defaults to
+// (act 1) → globalDepth === floor, so sims/tests are byte-identical.
+function globalDepth(){
+  const r = state.run || {};
+  return ((r.act || 1) - 1) * 15 + (r.floor || 0);
+}
+
 // THE single source of truth for what one enemy hit lands for. Both combat
 // resolution and the on-screen telegraph call this, so the number shown is
 // always exactly the number that hits.
 function scaledEnemyHit(ctx, base){
-  let dmg = (base + Math.floor((state.run.floor||0) * ENEMY_FLOOR_SCALE)) * ENEMY_DMG_MULT;
+  let dmg = (base + Math.floor(globalDepth() * ENEMY_FLOOR_SCALE)) * ENEMY_DMG_MULT;
   if(ctx.enemy.debuffs && ctx.enemy.debuffs.strength) dmg += ctx.enemy.debuffs.strength;
   if(ctx.enemy.debuffs && ctx.enemy.debuffs.weak) dmg *= 0.75;
   return Math.max(0, Math.round(dmg));
@@ -2550,7 +2588,9 @@ function advanceFloor(){
   run.combatPlayer = null;
   run.combatEnemy = null;
   if(run.floor >= 14){
-    onRunVictory();
+    // Boss down. More acts to climb? Descend deeper. Else the run is won.
+    if((run.act || 1) < ACTS.length) enterNextAct();
+    else onRunVictory();
   } else {
     saveState();
     showScreen('map-screen');
@@ -2558,9 +2598,32 @@ function advanceFloor(){
   }
 }
 
+// B22 — clear an act → carry everything (deck, relics, HP, gold, the
+// Spread) into a fresh, harder act with its own boss. A short interstitial
+// + a partial mend (not full — the climb should still bite).
+function enterNextAct(){
+  const run = state.run;
+  const clearedName = (ACTS[(run.act || 1) - 1] || ACTS[0]).name;
+  run.act = (run.act || 1) + 1;
+  run.floor = 0;
+  run.path = generatePath(mulberry32(run.rngSeed + run.act * 7919), run.act);
+  const mend = Math.floor(run.maxHp * 0.30);
+  run.hp = Math.min(run.maxHp, run.hp + mend);
+  const nextAct = ACTS[run.act - 1];
+  saveState();
+  showModal({
+    title: `${clearedName} — cleared`,
+    sub: `Act ${run.act} of ${ACTS.length}: ${nextAct.name}`,
+    body: `The way down opens. You bind your wounds (<strong>+${mend} HP</strong>) and descend — the dark gets deeper, and a new keeper waits at the bottom.`,
+    choices: [
+      { icon:'↡', label:`Descend into ${nextAct.name}`, onClick: () => { showScreen('map-screen'); renderMap(); } }
+    ]
+  });
+}
+
 function onRunVictory(){
   state.meta.runsCompleted += 1;
-  state.meta.bestFloor = Math.max(state.meta.bestFloor, 15);
+  state.meta.bestFloor = Math.max(state.meta.bestFloor, ACTS.length * 15);
   const gained = awardInsight(true);
   // Unlock the next Veil of difficulty
   const clearedVeil = (state.run && state.run.veil) || 0;
@@ -2568,8 +2631,8 @@ function onRunVictory(){
   saveState();
   showModal({
     title: 'The Crown Falls',
-    body: `The Fool of crowns sees his own face and laughs once before silence.<br><br><strong>+${gained} Insight</strong> &nbsp;·&nbsp; ${state.meta.insight} total`,
-    sub: `Veil ${state.meta.veil} unlocked. You have reached the top of the tower.`,
+    body: `Three keepers, three floors of the dark — and at the bottom the Fool of crowns sees his own face and laughs once before silence.<br><br><strong>+${gained} Insight</strong> &nbsp;·&nbsp; ${state.meta.insight} total`,
+    sub: `Veil ${state.meta.veil} unlocked. You climbed the whole Tower.`,
     choices: [
       { label: 'Return to the Library', onClick: () => { state.run = null; saveState(); showScreen('title-screen'); refreshTitle(); } }
     ]
@@ -3439,7 +3502,9 @@ function renderMap(){
   document.getElementById('map-hp').textContent = run.hp;
   document.getElementById('map-maxhp').textContent = run.maxHp;
   document.getElementById('map-gold').textContent = run.gold;
-  document.getElementById('map-title').textContent = `The Tower — Floor ${run.path.findIndex(f => !f.completed) + 1}/15`;
+  const _act = ACTS[(run.act || 1) - 1] || ACTS[0];
+  const _fl = run.path.findIndex(f => !f.completed) + 1;
+  document.getElementById('map-title').textContent = `Act ${run.act || 1}/${ACTS.length} · ${_act.name} — Floor ${_fl}/15`;
   const body = document.getElementById('map-rooms');
   body.innerHTML = '';
   const nextFloor = run.path.findIndex(f => !f.completed);
@@ -3461,7 +3526,7 @@ function renderMap(){
       const labels = {
         combat: node.enemyId ? ENEMY_BY_ID[node.enemyId].name : 'Combat',
         elite: node.enemyId ? ENEMY_BY_ID[node.enemyId].name : 'Elite',
-        boss: 'The Crowned Fool',
+        boss: node.enemyId ? ENEMY_BY_ID[node.enemyId].name : 'The Keeper',
         event: 'A Mystery',
         treasure: 'A Chest',
         rest: 'A Quiet Wing',
