@@ -819,7 +819,15 @@ body::after{
   text-align:center; font-family: var(--font-body); font-style:italic;
   color: var(--card-cream-dim); font-size: 13px; max-width: 280px;
 }
-.card-inspect .ci-actions{ display:flex; gap: 10px; }
+.card-inspect .ci-actions{ display:flex; gap: 10px; margin-top: 10px; }
+.ci-channel{
+  font-family: var(--font-display); letter-spacing: 0.12em; text-transform: uppercase;
+  font-size: 14px; padding: 12px 22px; border-radius: 6px; cursor: pointer;
+  background: var(--ornament-gold); color: var(--ink-black); border: none;
+  transition: transform 90ms;
+}
+.ci-channel:active{ transform: scale(0.96); }
+.ci-channel[disabled]{ background: var(--velvet); color: var(--card-cream-dim); cursor: default; }
 
 /* small util */
 .spacer{ height: 8px; }
@@ -953,7 +961,7 @@ body::after{
    ========================================================================= */
 
 const VERSION = 1;
-const BUILD = 'B12 · THE OPENING';  // visible on title; read it back to confirm you're current
+const BUILD = 'B13 · THE CHANNEL';  // visible on title; read it back to confirm you're current
 const SAVE_KEY = 'tarot-run-v1';
 
 /* ----- SEEDABLE RNG ----- */
@@ -1753,6 +1761,10 @@ function startCombat(enemyId){
     // The Cut (active Reading skill) result. 'silent' = legacy behavior;
     // set by cutTheDeck() on the UI path only — engine/tests never change it.
     readingFortune: 'silent',
+    // Patron Channel: feed 1 card/turn to your Patron so no card is ever
+    // dead. UI-only (channelCard); defaults here are inert for engine/tests.
+    channeledThisTurn: false,
+    channelFedCount: 0,
   };
 
   const player = {
@@ -1993,6 +2005,37 @@ function showChainBanner(suit, count, bonus){
   banner.classList.add('show');
 }
 
+/* THE PATRON CHANNEL — once per turn you may feed ANY card from hand to
+   your Patron instead of playing it. No card is ever dead: worst case it
+   fuels your Patron's identity, and that identity differs per Patron so
+   your "leftovers" play differently depending on who you are. UI-only
+   (invoked from the card-inspect modal); the engine/tests never call it,
+   and the combat-state defaults are inert. */
+const PATRON_CHANNEL = {
+  magician:  { label:'+1 energy',            apply:(ctx)=>{ ctx.player.energy += 1; } },
+  priestess: { label:'Draw 1',               apply:(ctx)=>{ drawCards(ctx, 1); } },
+  empress:   { label:'Heal 4 · +3 Ward',     apply:(ctx)=>{ healPlayer(ctx, 4); ctx.player.buffs.ward = (ctx.player.buffs.ward||0) + 3; } },
+  emperor:   { label:'Block 6 · Plate per 3',apply:(ctx)=>{ gainBlock(ctx, 6); ctx.combat.channelFedCount = (ctx.combat.channelFedCount||0) + 1; if(ctx.combat.channelFedCount % 3 === 0) ctx.player.buffs.plate = (ctx.player.buffs.plate||0) + 1; } },
+};
+function patronChannel(){ return PATRON_CHANNEL[ state.run && state.run.patron ] || PATRON_CHANNEL.magician; }
+function channelCard(handIdx){
+  const ctx = getCtx();
+  if(!ctx || !ctx.combat || ctx.combat.channeledThisTurn) return;
+  const entry = ctx.player.hand[handIdx];
+  if(!entry) return;
+  ctx.player.hand.splice(handIdx, 1);
+  if(!entry.ephemeral) ctx.player.discard.push(entry);   // stays in the deck cycle
+  const pc = patronChannel();
+  pc.apply(ctx);
+  ctx.combat.channeledThisTurn = true;
+  const banner = document.getElementById('aspect-banner');
+  if(banner){ banner.textContent = `CHANNELLED  ·  ${pc.label}`;
+    banner.classList.remove('show'); void banner.offsetWidth; banner.classList.add('show'); }
+  const ov = document.getElementById('card-inspect');
+  if(ov) ov.classList.remove('active');
+  renderCombat();
+}
+
 function endTurn(){
   const ctx = getCtx();
   // Resolve enemy intent
@@ -2026,6 +2069,7 @@ function endTurn(){
   ctx.combat.turnCostMod = 0;
   ctx.combat.aspectsTriggeredThisTurn = {};
   ctx.combat.chaliceUsedThisTurn = false;
+  ctx.combat.channeledThisTurn = false;
   ctx.combat.sealedLetterUsedThisCard = false;
 
   ctx.combat.turn += 1;
@@ -2982,6 +3026,18 @@ function showCardInspect(card, entry){
   const big = renderCardElement(card, { reversed: entry && entry.reversed });
   content.appendChild(big);
   info.innerHTML = `<em>${card.flavor || ''}</em>${(entry && entry.reversed) ? '<br><small style="color:var(--blood-bright)">REVERSED</small>' : ''}`;
+  // Patron Channel — offered only for a card live in your combat hand
+  const inCombat = state.run && state.run.combat && state.run.combatPlayer;
+  const hIdx = inCombat && entry ? state.run.combatPlayer.hand.indexOf(entry) : -1;
+  if(inCombat && hIdx >= 0){
+    const pc = patronChannel();
+    const used = state.run.combat.channeledThisTurn;
+    const act = document.createElement('div');
+    act.className = 'ci-actions';
+    act.innerHTML = `<button class="ci-channel"${used?' disabled':''}>${used?'Channel spent this turn':'⟐ Channel — '+pc.label}</button>`;
+    if(!used) act.querySelector('button').onclick = () => channelCard(hIdx);
+    info.appendChild(act);
+  }
   overlay.classList.add('active');
 }
 
