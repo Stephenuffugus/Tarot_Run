@@ -2,7 +2,7 @@
 
 When the user says "lets get started", read this first.
 
-## Where things are (as of B9 · CHAIN TEETH, hosting solved)
+## Where things are (as of B11 · THE WEB — hosting solved, skill layer + synergy shipped)
 
 - **Live game (PERMANENT): https://stephenuffugus.github.io/Tarot_Run/**
   - GitHub Pages, "Deploy from a branch" = `setup/project-structure` root.
@@ -17,7 +17,8 @@ When the user says "lets get started", read this first.
 - Build tag shown on title screen = `BUILD` const in index.html. Bump it every
   shippable change so the user can verify cache by reading it back.
 - Tests: `node test-cards.js` (78/0 errors), `node test.js`, `node sim-run.js`,
-  `node diag-combat.js` (regression suite TEST A–G: threat, Ward, Study, Spread, Chain).
+  `node diag-combat.js` (regression suite TEST A–H: threat, Ward, Study,
+  Spread, Chain, **and H = Wands Ember lay/detonate**).
 
 ## Shipped so far (depth-injection roadmap)
 
@@ -33,41 +34,48 @@ When the user says "lets get started", read this first.
 7. **Chain has teeth** — extending a chain costs energy (`chainTaxFor`:
    FREE=2, CAP=3 → tax 0,0,1,2,3,3). Charged before affordability.
 8. **Hosting solved** — permanent GitHub Pages URL (see above).
+9. **B10 · THE CUT** — the Reading is now an active skill: pre-combat
+   "Cut the Deck" marker-sweep. Sun (center)=+2 Str & free Reading;
+   faint=+1 Str; Tower (edges)=start Weak 2; else silent (=legacy).
+   `combat.readingFortune` defaults 'silent' (engine/tests untouched);
+   `cutTheDeck()` is UI-only (enterNode path, rAF-guarded). Marker
+   speed scales with floor.
+10. **B11 · THE WEB** — task #18: suits got a second verb. n=1–3 kept
+   as clean baseline (regression anchor); n=4–10 are now engines —
+   Wands lay/detonate Ember, Swords apply→cash debuffs, Cups turn
+   sustain→damage, Pents turn Block→fist; cross-suit web throughout.
+   Patron decks are 4 bespoke 16-card decks (was one re-suited
+   template), each with a turn-1 combo seed, power held even.
 
-## THE OPEN DECISION — RESOLVED (2026-05-19 playtest verdict)
+## THE OPEN QUESTION — next playtest verdict (post B10+B11)
 
-User's verdict: "starting to get more fun, we're getting there" but
-"more than just a choice to make — like a mini game sometimes, little
-skill things" and "still very simple, lacking depth in strategy."
+Both confirmed needs from the 2026-05-19 verdict are now SHIPPED:
+A (active skill) = B10 The Cut; B (strategy depth) = B11 The Web +
+bespoke decks. The Chain dial stays locked — do NOT re-tune the tax,
+do NOT sim-chase (sim greedy ~0% by design, never uses Reading/Cut).
 
-Routing: the Chain dial is RIGHT — do NOT re-tune the tax, do NOT
-sim-chase. The game now needs TWO things, both confirmed by the user:
-  A. An **active skill layer** ("little skill things, mini game sometimes")
-     — Hades-style active inputs, not deeper menus. This is the new
-     headline direction.
-  B. **More strategic depth** — the deferred task #18 (rework 56 minor
-     cards for real card-to-card synergy).
+Awaiting the user's felt verdict on:
+1. **The Cut** — does it create a "lean in" beat each fight, or a
+   chore? Are Sun worth chasing / Tower scary? Speed curve OK on phone?
+   → routes to: keep as-is / make it rarer-but-bigger (elite+boss only) /
+   widen payoff spread / tune marker speed.
+2. **The Web** — do the suits now feel like engines with real combos?
+   Do the 4 Patrons feel genuinely different to pilot? Any combo that
+   is degenerate (too strong) or never worth it (dead)?
+   → routes to: per-card power tuning by feel + diag, NOT sim.
+3. **Decks balanced?** Each Patron deck is 16 cards, low curve, one
+   off-suit splash that seeds its engine. If one feels weak/strong,
+   adjust that deck's list in `PATRON_DECKS` (no test asserts contents).
 
-Ship A first in small playtestable increments (it changes moment-to-moment
-feel fastest); B is the slower deep fix underneath it.
+## Likely next increments (let the user steer)
 
-## Next work — the skill layer (A), ship-small loop
-
-Candidate first increments (let the user steer; see session for the
-chosen one). All must keep `node test-cards.js` at 0 errors + diag green:
-- **Active Reading** — convert the passive RNG Reading into a recurring
-  skill input ("cut the deck" timing/precision → scales the boon).
-- **Chain detonation skill** — sweet-spot timing on the chain-of-3
-  Aspect detonation; nailing it amplifies, optional push-luck backfire.
-- **Arcana Trial events** — occasional Major-Arcana mini-game rooms
-  (Wheel push-luck, Tower reflex, Star memory) between fights.
-
-## Then: task #18 — 56-card synergy (strategy depth, B)
-
-Rework the 56 vanilla minors for real card-to-card synergy: Wands→Ember
-lay/detonate, Swords→debuff payoff, Cups→Ward engine, Pents→block→damage;
-each suit keys off the others. Build combo pieces into Patron starter
-decks so synergy is felt turn one. Keep all 78 cards working.
+- Per-feel balance pass on B11 cards / Patron decks (fast dials).
+- The 2nd skill moment if Cut lands: **skill input on Chain detonation**
+  (the chain-of-3 Aspect) — was the user's stated follow-on.
+- Card rewards/draft pool should surface the new engine cards so a
+  build can be drafted mid-run (check the reward generator picks from
+  the textured n=4–10 band, not just stat-sticks).
+- Reading reveal UI could hint when it's free (readingFortune==='strong').
 
 ## Backlog (lower priority)
 - Apply the VEILS modifiers (data exists; wire enemy HP/dmg/restHeal mods
