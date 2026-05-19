@@ -272,15 +272,37 @@ body::after{
 .room-node.rest  { border-color: var(--suit-cups); color: var(--suit-cups); }
 .room-node.boss  { border-color: var(--blood-bright); color: var(--blood-bright); width:74px; height:74px; font-size:32px;
   box-shadow: 0 0 22px rgba(198,61,79,0.45); }
-.room-node.completed{ opacity: 0.38; pointer-events:none; }
-.room-node.current{
-  box-shadow: 0 0 18px rgba(244,216,164,0.65);
-  border-color: var(--footlight-glow); border-width: 2.5px;
-  animation: currentPulse 1.6s ease-in-out infinite;
+/* B23 — path BEHIND: small, drained, ✓-stamped. Unmistakably spent. */
+.room-node.completed{
+  pointer-events:none;
+  opacity: 0.6;
+  transform: scale(0.74);
+  filter: grayscale(1) brightness(0.7);
+  border-color: var(--ornament-deep) !important;
+  color: var(--suit-cups) !important;          /* the ✓ reads as cleared */
+  background: radial-gradient(circle, rgba(40,52,54,0.6), var(--bg-stage-deep)) !important;
+  box-shadow: none !important;
 }
-.room-node.locked{ opacity: 0.22; pointer-events:none; }
+.room-node.completed .room-label{ opacity: 0.4; }
+/* the LIVE choice: big, bright, full-colour, beckoning. */
 .room-node.accessible{
-  animation: nodeBeckon 2.4s ease-in-out infinite;
+  opacity: 1;
+  transform: scale(1.08);
+  border-width: 2.5px;
+  box-shadow: 0 0 0 3px rgba(244,216,164,0.18), 0 0 20px rgba(244,216,164,0.6);
+  animation: nodeBeckon 1.7s ease-in-out infinite;
+}
+/* path AHEAD: present but clearly untrodden — cool, dim, no ✓. */
+.room-node.locked{
+  pointer-events:none;
+  opacity: 0.4;
+  filter: saturate(0.5) brightness(0.85);
+}
+.room-here{
+  position:absolute; top:-20px; left:50%; transform:translateX(-50%);
+  font-family: var(--font-body); font-size:10px; font-style:italic;
+  letter-spacing:0.04em; color: var(--footlight-glow);
+  white-space:nowrap; text-shadow:0 0 6px rgba(0,0,0,0.8);
 }
 @keyframes currentPulse{
   0%,100% { transform: scale(1); }
@@ -613,6 +635,19 @@ body::after{
   0%  { opacity:1; transform: translate(0,0) rotate(0); }
   100%{ opacity:0; transform: translate(var(--sx), var(--sy)) rotate(var(--sr)); }
 }
+/* B23 — the turn transition is now SEEN: the old hand sweeps to the
+   discard pile, the new hand deals in. (Cards used to just vanish.) */
+.discard-fly{
+  position:fixed; z-index:76; pointer-events:none; margin:0;
+  border-radius: var(--radius-soft);
+  transition: transform 460ms cubic-bezier(.55,0,.7,1), opacity 460ms ease-in;
+}
+.hand .card.dealt{ animation: handDealIn 300ms ease-out backwards; }
+@keyframes handDealIn{
+  0%   { opacity:0; transform: translateY(54px) scale(0.9); }
+  100% { opacity:1; transform: none; }
+}
+.et-disc{ font-size:11px; color: var(--footlight-glow); opacity:0.92; margin-left:4px; }
 
 /* aspect banner */
 .aspect-banner{
@@ -1096,7 +1131,7 @@ body::after{
    ========================================================================= */
 
 const VERSION = 1;
-const BUILD = 'B22 · THE ASCENT';  // visible on title; read it back to confirm you're current
+const BUILD = 'B23 · LEGIBILITY';  // visible on title; read it back to confirm you're current
 const SAVE_KEY = 'tarot-run-v1';
 
 /* ----- SEEDABLE RNG ----- */
@@ -3209,6 +3244,13 @@ function renderCombat(){
   document.getElementById('draw-count').textContent = ctx.player.draw.length;
   document.getElementById('discard-count').textContent = ctx.player.discard.length;
 
+  // B23 — End Turn states plainly that unplayed cards will discard
+  const etb = document.getElementById('btn-end-turn');
+  if(etb){
+    const n = ctx.player.hand.filter(c => !c.ephemeral).length;
+    etb.innerHTML = n > 0 ? `End Turn <span class="et-disc">↻ discards ${n}</span>` : 'End Turn';
+  }
+
   // remember this frame so the next render can FX the delta
   _uiHpPrev = ctx.player.hp; _uiBlockPrev = ctx.player.block; _uiEhpPrev = ctx.enemy.hp;
 }
@@ -3514,12 +3556,18 @@ function renderMap(){
     floor.nodes.forEach((node, nIdx) => {
       const n = document.createElement('div');
       n.className = 'room-node ' + node.type;
-      if(floor.completed) n.classList.add('completed');
-      else if(fIdx === nextFloor) n.classList.add('accessible');
+      const isDone = floor.completed, isNext = !isDone && fIdx === nextFloor;
+      if(isDone) n.classList.add('completed');
+      else if(isNext) n.classList.add('accessible');
       else n.classList.add('locked');
-      // glyph
+      // glyph — B23: cleared rooms read as ✓ (path BEHIND), not a faint copy
       const glyphs = { combat:'⚔', elite:'☠', event:'❉', treasure:'◈', rest:'☾', boss:'♛', merchant:'⚖' };
-      n.textContent = glyphs[node.type] || '?';
+      n.textContent = isDone ? '✓' : (glyphs[node.type] || '?');
+      if(isNext){
+        const here = document.createElement('div');
+        here.className = 'room-here'; here.textContent = '▸ you are here';
+        n.appendChild(here);
+      }
       // label
       const lbl = document.createElement('div');
       lbl.className = 'room-label';
@@ -3755,14 +3803,69 @@ function playStrikeFX(intent, dmg){
     setTimeout(() => { fx.remove(); if(screen) screen.classList.remove('combat-shake'); }, 950);
   }, 230);
 }
+// B23 — capture the CURRENT hand's rendered cards BEFORE endTurn() wipes
+// it, so we can fly them to the discard pile. Clones only — the real
+// hand is rebuilt by endTurn→renderCombat. rAF-gated → inert in sims.
+function snapshotHand(){
+  const out = [];
+  if(typeof requestAnimationFrame !== 'function') return out;
+  document.querySelectorAll('#hand .card').forEach(el => {
+    const clone = el.cloneNode(true);
+    clone.onclick = null;
+    out.push({ clone, rect: el.getBoundingClientRect() });
+  });
+  return out;
+}
+function sweepHandToDiscard(snap){
+  if(typeof requestAnimationFrame !== 'function' || !snap.length) return;
+  const pile = document.getElementById('pile-discard');
+  const pr = pile ? pile.getBoundingClientRect()
+    : { left: window.innerWidth/2 - 20, top: window.innerHeight - 40, width:40, height:40 };
+  const tx = pr.left + pr.width/2, ty = pr.top + pr.height/2;
+  snap.forEach((s, i) => {
+    const c = s.clone;
+    c.classList.add('discard-fly');
+    c.style.left = s.rect.left + 'px'; c.style.top = s.rect.top + 'px';
+    c.style.width = s.rect.width + 'px'; c.style.height = s.rect.height + 'px';
+    document.body.appendChild(c);
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      c.style.transitionDelay = (i * 38) + 'ms';
+      const dx = tx - (s.rect.left + s.rect.width/2);
+      const dy = ty - (s.rect.top + s.rect.height/2);
+      c.style.transform = `translate(${dx}px,${dy}px) scale(0.26) rotate(${(i%2?1:-1)*20}deg)`;
+      c.style.opacity = '0.12';
+    }));
+    setTimeout(() => c.remove(), 560 + i * 38);
+  });
+}
+function dealInHand(){
+  if(typeof requestAnimationFrame !== 'function') return;
+  const cards = document.querySelectorAll('#hand .card');
+  cards.forEach((c, i) => { c.style.animationDelay = (i * 45) + 'ms'; c.classList.add('dealt'); });
+  setTimeout(() => cards.forEach(c => c.classList.remove('dealt')), 360 + cards.length * 45);
+}
 function endTurnWithFX(){
   const r = state.run;
   if(!r || !r.combat || !r.combatPlayer || !r.combatEnemy){ endTurn(); return; }
+  // B23 — the FIRST time you'd discard unplayed cards, teach the rule once.
+  const losingCards = r.combatPlayer.hand.some(c => !c.ephemeral);
+  if(losingCards && !(state.meta && state.meta.taughtHandReset) && typeof requestAnimationFrame === 'function'){
+    showModal({
+      title: 'The Hand Resets',
+      sub: 'Every turn is a fresh deal.',
+      body: 'At the end of each turn your unplayed cards slide to the <b>discard pile</b> and you draw a new hand. They are <b>not lost</b> — when the draw pile runs dry it reshuffles from the discard. So spend each turn fully: a card you hold is a card wasted.',
+      choices: [{ icon:'↻', label:'I understand', onClick: () => { if(state.meta) state.meta.taughtHandReset = true; saveState(); endTurnWithFX(); } }]
+    });
+    return;
+  }
   const intent = Object.assign({}, r.combatEnemy.intent);
   const hpBefore = r.combatPlayer.hp;
+  const snap = snapshotHand();              // BEFORE endTurn wipes the hand
   endTurn(); // engine resolves synchronously
   if(typeof requestAnimationFrame !== 'function') return;
   if(!state.run.combat || state.run.combatPlayer.hp <= 0 || state.run.combatEnemy.hp <= 0) return;
+  sweepHandToDiscard(snap);                 // old hand flies away
+  dealInHand();                             // new hand deals in
   playStrikeFX(intent, hpBefore - state.run.combatPlayer.hp);
 }
 document.getElementById('btn-end-turn').onclick = endTurnWithFX;
