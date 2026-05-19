@@ -2,7 +2,7 @@
 
 When the user says "lets get started", read this first.
 
-## Where things are (as of B11 · THE WEB — hosting solved, skill layer + synergy shipped)
+## Where things are (as of B12 · THE OPENING — hosting solved, skill + synergy + Patron-balance shipped)
 
 - **Live game (PERMANENT): https://stephenuffugus.github.io/Tarot_Run/**
   - GitHub Pages, "Deploy from a branch" = `setup/project-structure` root.
@@ -19,6 +19,10 @@ When the user says "lets get started", read this first.
 - Tests: `node test-cards.js` (78/0 errors), `node test.js`, `node sim-run.js`,
   `node diag-combat.js` (regression suite TEST A–H: threat, Ward, Study,
   Spread, Chain, **and H = Wands Ember lay/detonate**).
+- `node sim-archetypes.js` (dev-only stress harness, `SEEDS=N` env;
+  4 player types × 4 Patrons). Reports SHAPE/deltas — do NOT tune to
+  its win% (bot-capped ≈0 by design); read engine-reachability,
+  Patron spread, comboist−masher delta, run shape.
 
 ## Shipped so far (depth-injection roadmap)
 
@@ -46,8 +50,18 @@ When the user says "lets get started", read this first.
    sustain→damage, Pents turn Block→fist; cross-suit web throughout.
    Patron decks are 4 bespoke 16-card decks (was one re-suited
    template), each with a turn-1 combo seed, power held even.
+11. **B12 · THE OPENING** — `sim-archetypes.js` (4 player types × 4
+   Patrons × 60 seeds, dev-only, NEVER loaded by the game) found two
+   STRUCTURAL breaks: Empress/Emperor decks had no opening offense
+   (Empress 51/60 dead by floor 1, stalled with no win condition);
+   the Cups heal→damage verb was dead (7 fires in 629 fights, gated
+   at heal 12+). Fixes: Empress += wands-4+cups-10+swords-5; Emperor
+   += pents-7+wands-4 (pents-9 kept); cups-9 gate 12→6 (now reliably
+   fires), cups-10 also scales off Ward. Re-run: Cups verb 7→81,
+   engine reachability 0.83→1.21 fires/fight. Bot win% is bot-capped
+   by design — NOT the signal; the engine-reachability delta is.
 
-## THE OPEN QUESTION — next playtest verdict (post B10+B11)
+## THE OPEN QUESTION — next playtest verdict (post B10–B12)
 
 Both confirmed needs from the 2026-05-19 verdict are now SHIPPED:
 A (active skill) = B10 The Cut; B (strategy depth) = B11 The Web +
