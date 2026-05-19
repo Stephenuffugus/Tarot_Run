@@ -884,6 +884,22 @@ body::after{
 }
 .card-reward-grid .card{ margin-left:0; width: 88px; min-width:88px; height: 132px; }
 
+/* B20 — The Merchant shop */
+.room-node.merchant{ border-color: var(--footlight-glow); color: var(--footlight-glow);
+  background: radial-gradient(circle, rgba(212,165,116,0.12), var(--bg-stage-deep)); }
+.shop-cards{ display:flex; gap:10px; justify-content:center; align-items:flex-start; margin:10px 0 2px; }
+.shop-slot{ display:flex; flex-direction:column; align-items:center; gap:5px; }
+.shop-slot .card{ margin-left:0; width:88px; min-width:88px; height:132px; }
+.shop-slot .card:not(.playable){ opacity:0.42; filter:grayscale(0.5); }
+.shop-price{ font-family:var(--font-num); font-size:13px; color:var(--footlight-glow); letter-spacing:0.04em; }
+.shop-price.poor{ color:var(--card-cream-dim); opacity:0.65; }
+.shop-price.sold{ color:var(--blood-bright); }
+.shop-gold{ text-align:center; font-family:var(--font-num); font-size:14px;
+  color:var(--card-cream); margin:14px 0 10px; letter-spacing:0.04em; }
+.shop-gold strong{ color:var(--footlight-glow); font-size:18px; }
+.modal-choice.poor{ opacity:0.45; cursor:not-allowed; }
+.modal-choice.poor:active{ transform:none; background:rgba(13,33,39,0.5); }
+
 /* ============== CODEX / DECK VIEWER ============== */
 .deck-viewer{
   padding: 12px 16px;
@@ -1076,7 +1092,7 @@ body::after{
    ========================================================================= */
 
 const VERSION = 1;
-const BUILD = 'B19 · THE GUARD SHATTERS';  // visible on title; read it back to confirm you're current
+const BUILD = 'B20 · THE MERCHANT';  // visible on title; read it back to confirm you're current
 const SAVE_KEY = 'tarot-run-v1';
 
 /* ----- SEEDABLE RNG ----- */
@@ -1818,6 +1834,7 @@ function generatePath(rng){
     if(i === 14) nodes = [{ type:'boss', enemyId:'crown' }];
     else if(i === 0) nodes = [{ type:'combat', enemyId: pickRand(ENEMIES.filter(e=>e.tier===1).map(e=>e.id), rng) }];
     else if(i === 4 || i === 9) nodes = [{ type:'treasure' }];
+    else if(i === 6 || i === 11) nodes = [{ type:'merchant' }, { type:'rest' }];  // B20 — shop vs heal: a real choice
     else if(i === 8 || i === 12) nodes = [
       { type:'elite', enemyId: pickRand(ENEMIES.filter(e=>e.elite).map(e=>e.id), rng) },
       { type:'rest' },
@@ -1831,7 +1848,8 @@ function generatePath(rng){
         if(roll < 0.55) type = 'combat';
         else if(roll < 0.75) type = 'event';
         else if(roll < 0.88) type = 'rest';
-        else type = 'treasure';
+        else if(roll < 0.94) type = 'treasure';
+        else type = 'merchant';   // B20 — occasional extra shop on top of the two guaranteed
         const node = { type };
         if(type === 'combat'){
           const tier = i < 5 ? 1 : (i < 10 ? 2 : 3);
@@ -2489,6 +2507,8 @@ function enterNode(node){
     showEventModal();
   } else if(node.type === 'treasure'){
     showTreasureModal();
+  } else if(node.type === 'merchant'){
+    showMerchantModal();
   }
 }
 
@@ -2655,6 +2675,130 @@ function showTreasureModal(){
       { icon:'⛒', label:'Leave it', note:'+25 gold', onClick: () => { state.run.gold += 25; advanceFloor(); } },
     ]
   });
+}
+
+// B20 · THE MERCHANT — gold finally has a sink. A shop node: a small
+// rotating stock (3 floor-tier cards + 1 relic), pay-gold banish (no
+// HP price, unlike the Hermit's Bargain), and a paid mend. Stock and
+// sold-state live in THIS closure — no run/state field, so no VERSION
+// bump and nothing for migrateMeta() to worry about. Only "Leave"
+// advances the floor; everything else re-renders the stall in place.
+// SHOP_PRICE is a by-feel tuning dial (income ≈ 10+floor·1.5 a fight).
+const SHOP_PRICE = { common:40, uncommon:60, rare:90, relic:130, banish:50, heal:45 };
+function showMerchantModal(){
+  const veil = document.getElementById('modal-veil');
+  const m = document.getElementById('modal');
+  const run = state.run;
+  const rng = mulberry32(run.rngSeed + run.floor * 547);
+
+  // Floor-appropriate stock, mirroring the reward tiers; no starters.
+  let pool;
+  if(run.floor < 4)      pool = ALL_CARDS.filter(c => c.rarity === 'common' || c.rarity === 'uncommon');
+  else if(run.floor < 9) pool = ALL_CARDS.filter(c => c.rarity === 'uncommon' || c.rarity === 'rare');
+  else                   pool = ALL_CARDS.filter(c => c.rarity === 'rare');
+  pool = pool.filter(c => c.rarity !== 'starter');
+  const candidates = pool.slice(); shuffleInPlace(candidates, rng);
+  const cardStock = [];
+  for(const c of candidates){
+    if(cardStock.length >= 3) break;
+    if(!cardStock.find(s => s.card.id === c.id))
+      cardStock.push({ card:c, price: SHOP_PRICE[c.rarity] || 60, sold:false });
+  }
+  const relicPool = RELICS.filter(r => !run.relics.includes(r.id));
+  shuffleInPlace(relicPool, rng);
+  const relicStock = relicPool.length ? { relic: relicPool[0], price: SHOP_PRICE.relic, sold:false } : null;
+  const healAmt = Math.floor(run.maxHp * 0.35);
+  let banishing = false;
+
+  const leave = () => { veil.classList.remove('active'); advanceFloor(); };
+  const buy = (price, apply) => { if(run.gold < price) return; run.gold -= price; apply(); render(); };
+
+  function banishPicker(){
+    m.innerHTML = `
+      <div class="modal-title">Banish a Card</div>
+      <div class="modal-sub">The merchant takes it off your hands — ◈ ${SHOP_PRICE.banish}.</div>
+      <div class="dv-grid" id="shop-bgrid"></div>
+      <div class="modal-choices"><div class="modal-choice" id="shop-bback">
+        <div class="mc-icon">‹</div><div class="mc-text"><strong>Back to the stall</strong>
+        <small>You haven't paid yet.</small></div></div></div>`;
+    const grid = m.querySelector('#shop-bgrid');
+    run.deck.forEach((entry, idx) => {
+      const card = CARD_BY_ID[entry.cardId];
+      const el = renderCardElement(card, { reversed: entry.reversed });
+      el.classList.add('playable');
+      el.onclick = () => {
+        if(banishing) return; banishing = true;
+        el.classList.add('card-destroy');
+        grid.querySelectorAll('.card').forEach(c => { if(c!==el){ c.style.opacity='0.22'; c.style.pointerEvents='none'; } });
+        setTimeout(() => { run.gold -= SHOP_PRICE.banish; run.deck.splice(idx,1); banishing = false; render(); }, 720);
+      };
+      grid.appendChild(el);
+    });
+    m.querySelector('#shop-bback').onclick = render;
+  }
+
+  function render(){
+    const g = run.gold, can = p => g >= p;
+    m.innerHTML = `
+      <div class="modal-title">The Merchant</div>
+      <div class="modal-sub">"Everything has a price — even what you'd rather forget."</div>
+      <div class="shop-cards" id="shop-cards"></div>
+      <div class="modal-choices" id="shop-rows"></div>
+      <div class="shop-gold">your gold &nbsp;◈ <strong>${g}</strong></div>
+      <div class="modal-choices"><div class="modal-choice" id="shop-leave">
+        <div class="mc-icon">⛒</div><div class="mc-text"><strong>Leave the stall</strong></div></div></div>`;
+    const cc = m.querySelector('#shop-cards');
+    cardStock.forEach(s => {
+      const slot = document.createElement('div'); slot.className = 'shop-slot';
+      const el = renderCardElement(s.card, {});
+      const buyable = !s.sold && can(s.price);
+      if(buyable){ el.classList.add('playable'); el.onclick = () => buy(s.price, () => {
+        s.sold = true;
+        run.deck.push({ cardId:s.card.id, reversed:false });
+        const dc = state.meta.discoveredCards;
+        dc[s.card.id] = dc[s.card.id] || { name:s.card.name, seen:0, played:0 };
+        dc[s.card.id].seen += 1;
+      }); }
+      slot.appendChild(el);
+      const tag = document.createElement('div');
+      tag.className = 'shop-price' + (s.sold ? ' sold' : (can(s.price) ? '' : ' poor'));
+      tag.textContent = s.sold ? 'SOLD' : `◈ ${s.price}`;
+      slot.appendChild(tag);
+      cc.appendChild(slot);
+    });
+    const rows = m.querySelector('#shop-rows');
+    const addRow = (icon, title, note, enabled, fn) => {
+      const r = document.createElement('div');
+      r.className = 'modal-choice' + (enabled ? '' : ' poor');
+      r.innerHTML = `<div class="mc-icon">${icon}</div><div class="mc-text"><strong>${title}</strong><small>${note}</small></div>`;
+      if(enabled) r.onclick = fn;
+      rows.appendChild(r);
+    };
+    if(relicStock){
+      const sold = relicStock.sold;
+      addRow('☆', sold ? `${relicStock.relic.name} — yours` : `Relic · ${relicStock.relic.name}`,
+        sold ? relicStock.relic.desc : `${relicStock.relic.desc} — ◈ ${relicStock.price}`,
+        !sold && can(relicStock.price),
+        () => buy(relicStock.price, () => {
+          relicStock.sold = true;
+          run.relics.push(relicStock.relic.id);
+          state.meta.relicsFound[relicStock.relic.id] = true;
+        }));
+    }
+    addRow('✎', 'Banish a card',
+      `Remove one card from your deck — coin, not blood. — ◈ ${SHOP_PRICE.banish}`,
+      can(SHOP_PRICE.banish) && run.deck.length > 1,
+      banishPicker);
+    const needsHeal = run.hp < run.maxHp;
+    addRow('♥', 'A mended wound',
+      needsHeal ? `Heal ${healAmt} HP. — ◈ ${SHOP_PRICE.heal}` : `You are already whole.`,
+      needsHeal && can(SHOP_PRICE.heal),
+      () => buy(SHOP_PRICE.heal, () => { run.hp = Math.min(run.maxHp, run.hp + healAmt); }));
+    m.querySelector('#shop-leave').onclick = leave;
+  }
+
+  render();
+  veil.classList.add('active');
 }
 
 function showEventModal(){
@@ -3278,7 +3422,7 @@ function renderMap(){
       else if(fIdx === nextFloor) n.classList.add('accessible');
       else n.classList.add('locked');
       // glyph
-      const glyphs = { combat:'⚔', elite:'☠', event:'❉', treasure:'◈', rest:'☾', boss:'♛' };
+      const glyphs = { combat:'⚔', elite:'☠', event:'❉', treasure:'◈', rest:'☾', boss:'♛', merchant:'⚖' };
       n.textContent = glyphs[node.type] || '?';
       // label
       const lbl = document.createElement('div');
@@ -3290,6 +3434,7 @@ function renderMap(){
         event: 'A Mystery',
         treasure: 'A Chest',
         rest: 'A Quiet Wing',
+        merchant: 'The Merchant',
       };
       lbl.textContent = labels[node.type] || '';
       n.appendChild(lbl);
