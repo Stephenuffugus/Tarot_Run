@@ -2,7 +2,7 @@
 
 When the user says "lets get started", read this first.
 
-## Where things are (as of B21 · REWARD THE ENGINE — combos pay, Aspect detonates, Cups lives)
+## Where things are (as of B22 · THE ASCENT — the run is 3 escalating acts)
 
 - **Live game (PERMANENT): https://stephenuffugus.github.io/Tarot_Run/**
   - GitHub Pages, "Deploy from a branch" = `setup/project-structure` root.
@@ -203,8 +203,34 @@ Awaiting the user's felt verdict on:
    the delta. Watch in playtest: does Pents/block-spam feel too
    dominant now (emperor masher rose)?
 
-## Awaiting felt verdict (B19 + B20 + B21)
+21. **B22 · THE ASCENT** — user playtested B21: cleared a FULL run
+   (boss + all). The "cliff" was sim-bot incompetence, NOT the game
+   (confirms RESUME: sim can't judge difficulty). Real ask: run was
+   one 15-floor act → crown → menu ("same boss/setup again"); wants
+   escalating areas ("2nd, 3rd, 4th etc, 15+ spaces"). Shipped a
+   data-driven `ACTS` array (3 acts: The Undercroft → The Gallery of
+   Mirrors → The Crown — append to add more). `run.act` (default 1,
+   guarded `run.act||1` everywhere → NO VERSION bump, sims/old saves
+   byte-identical). `generatePath(rng, act)` boss = `ACTS[act-1]`.
+   `globalDepth()` = ((act||1)-1)*15+floor replaces run.floor in
+   scaledEnemyHit + enemy-HP (continuous escalation; defaults to
+   floor). `advanceFloor` boss-clear → `enterNextAct()` (carry
+   deck/relics/HP/gold/Spread, fresh harder path, +30% mend,
+   interstitial) unless final → `onRunVictory()`. 2 NEW bosses
+   (Hanged King hp95 / Glass Magus hp128; crown 180 = finale) so
+   never the same wall twice. Smoke-verified through all 3 acts:
+   distinct bosses, scaledHit(base10) 8→11→13, final ~232 HP,
+   victory only after act 3, state carries. Zero regression.
 
+## Awaiting felt verdict (B19–B22)
+
+- **B22**: do the 3 acts feel like real progression? Is the
+  escalation curve right (act 2/3 enemies — too soft / brutal)? Are
+  the 2 new bosses (Hanged King, Glass Magus) distinct & fun, or
+  filler? Is the +30% inter-act mend the right amount (STS heals
+  full at campfire; we keep tension)? Want MORE acts (it's a
+  one-line append to `ACTS`) or an endless mode? Per-act reward
+  tiers currently reset (act-2 f0 offers commons again) — bump?
 - **B19**: banish opens cleanly now? The shield-shatter — lands, too
   much, too little? Combat read less "curt" (heal/block off YOUR HUD,
   numbers pulse)?
