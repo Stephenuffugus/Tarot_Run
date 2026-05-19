@@ -1,0 +1,45 @@
+name: Deploy Tarot Run to GitHub Pages
+
+# Permanent test/play host. Independent of the Codespace.
+# Every push to the playtest branch rebuilds the live site automatically.
+on:
+  push:
+    branches:
+      - setup/project-structure
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Only the newest deploy matters; cancel superseded in-flight runs.
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Self-enables GitHub Pages via the Actions token (no manual toggle).
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+        with:
+          enablement: true
+
+      - name: Upload site
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: .
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
