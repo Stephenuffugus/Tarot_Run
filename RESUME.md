@@ -2,7 +2,7 @@
 
 When the user says "lets get started", read this first.
 
-## Where things are (as of B23 · LEGIBILITY — hand-reset & map now communicate state)
+## Where things are (as of B24 · THE SHADOW DECK — every Minor has a true Reversed face)
 
 - **Live game (PERMANENT): https://stephenuffugus.github.io/Tarot_Run/**
   - GitHub Pages, "Deploy from a branch" = `setup/project-structure` root.
@@ -235,23 +235,30 @@ Awaiting the user's felt verdict on:
    dead CSS. Now BEHIND = small/grayscale/✓, HERE = big/bright/glow +
    "▸ you are here", AHEAD = cool-dim/no-✓. Zero regression.
 
-## NEXT (user steer pending): card + combo DIVERSITY
+23. **B24 · THE SHADOW DECK** — answer to the "boring/samey, need
+   card+combo diversity, elegant not confusing" verdict (user picked
+   Reversed-as-true-face over Resonances/upgrades/Major-mods). All 56
+   Minor `reversedPlay`/`reversedDesc` authored (engine already routed
+   them — B15 only used the generic −1cost/×weaker fallback). ONE
+   rule: Reversed = the card's INVERTED suit-engine role, same
+   power & cost (Wands striker⇄ember, Cups heal⇄ward/fist, Swords
+   pierce⇄debuff, Pents wall⇄fist) → ~112 effects, combos shift by
+   orientation, 0 new card types. Data-driven `REVERSED_MINORS`
+   block after MINOR_CARDS gen. Display: shadow desc + cold tint +
+   "↻ SHADOW" ribbon at FULL cost; legacy −1/weaker path kept ONLY
+   for cards w/o an authored face (curses); inspect shows BOTH
+   faces. `test-cards.js` extended +56 reversed → 0 errors.
 
-Playtest verdict (Magician, act 1): "felt okay, getting boring by the
-end, I could do it easily. We need more diversity in cards and the way
-cards combo. There has to be a unique and elegant way to expand
-WITHOUT making it super confusing." Note: user only played ACT 1 —
-acts 2/3 escalate (B22) but the *variety* ceiling is the real ask.
-Strongest elegant lever (memory-noted, code hooks already exist):
-**make Reversed a true alternate card face** (B15 Turn of Fate only
-made it −1 cost/×weaker; `reversedDesc`/`reversedPlay` hooks + the
-`.card.reversed` rotate already exist) — doubles the design space &
-changes combos by orientation with ~zero new rules, fully tarot-
-native. Alts: cross-suit named Resonances / card upgrades
-(Illumination) / Major-Arcana run modifiers. Present as a steer
-question, recommend Reversed-as-face, then build the pick.
+## Awaiting felt verdict (B19–B24)
 
-## Awaiting felt verdict (B19–B23)
+- **B24**: do the Shadow faces add real expression — is "flip a card
+  to flip its combo role" intuitive on the phone, or confusing? Any
+  shadow face degenerate (too strong) or dead (never worth it)? Is
+  the cold-tint + ↻SHADOW ribbon legible? Reversed draw chance is
+  `FATE_BASE_CHANCE` 0.22 (per-Patron `FATE_REVERSED_MULT` now
+  largely vestigial for minors — the fork is effect, not ×weaker;
+  may want to rename/retune the Fate framing). → routes to:
+  per-card shadow tuning by feel + diag, NOT sim.
 
 - **B22**: do the 3 acts feel like real progression? Is the
   escalation curve right (act 2/3 enemies — too soft / brutal)? Are
@@ -311,3 +318,10 @@ question, recommend Reversed-as-face, then build the pick.
 - Commit + push after every green increment; Pages auto-deploys it.
   The user playtests on their phone in fast loops — keep changelogs
   punchy and tell them exactly what to FEEL for.
+- COMMIT-CHAIN QUIRK (observed B23/B24): chaining `sed`/`grep ... &&
+  git commit ... && git push` in ONE Bash call silently no-ops the
+  commit (tree stays dirty, "no output"). Run the BUILD-bump sed as
+  its own call, then `git add/commit/push` as a SEPARATE standalone
+  call. Always verify with `git status --porcelain` + `git log -1`.
+- Heredoc `-m "$(cat <<EOF…)"` with ·/✓/↻ glyphs also flakes — prefer
+  `git commit -F /tmp/msg.txt` or a single plain `-m`.
