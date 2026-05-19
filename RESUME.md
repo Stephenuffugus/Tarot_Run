@@ -2,7 +2,7 @@
 
 When the user says "lets get started", read this first.
 
-## Where things are (as of B14 · THE STRIKE — + banish FX & enemy-attack walk-through)
+## Where things are (as of B15 · THE TURN OF FATE — visible bendable reversal shipped)
 
 - **Live game (PERMANENT): https://stephenuffugus.github.io/Tarot_Run/**
   - GitHub Pages, "Deploy from a branch" = `setup/project-structure` root.
@@ -80,19 +80,19 @@ When the user says "lets get started", read this first.
    slash + red flash, floating −N / gold BLOCKED). `endTurn()` stays
    synchronous; FX is UI-only + rAF-guarded; tests untouched.
 
-## DICE / FATE — researched, awaiting the user's pick
-The native tarot fate mechanic ALREADY exists in code but is shallow:
-`.card.reversed{rotate(180deg)}`, optional `reversedDesc`/`reversedPlay`
-hooks, a hidden 5% on-draw flip, relic `broken-mirror`. Research note:
-mandatory per-card fail-rolls are a known deckbuilder anti-pattern (STS
-avoids card-resolution RNG — kills agency). The fun version is VISIBLE,
-BENDABLE fate. Recommended: **"The Turn of Fate"** — reversal becomes
-visible on draw + a twisted variant, Patrons bend fate differently
-(reuses existing reversed render/data = low complexity, max flavor,
-class-manipulable). Alts offered: opt-in Fortune Dice (push-luck),
-Criteria Gates (deterministic surge/floor). User to choose; then build.
+14. **B15 · THE TURN OF FATE** — user picked this (over Fortune Dice /
+   Criteria Gates). Minors only, cost≥1. Reversed = −1 cost, effect
+   ×mult via `ctx.fateMult` threaded through the 4 resolve helpers;
+   upright = `Math.round(raw*1)=raw` so engine path byte-identical
+   (tests untouched). Patron bends: Magician forces Upright
+   (`fateChanceFor`→0), Emperor gentler ×0.80, Empress reversed also
+   heals 3, Priestess may `turnFate` 1×/turn (inspect-modal action).
+   `broken-mirror` relic +15% chance. Knobs: `FATE_BASE_CHANCE`
+   (0.22), `FATE_REVERSED_MULT` map. Hand readable (no 180 flip;
+   ribbon + discounted cost); inspect shows the rule. NOTE: Fortune
+   Dice (opt-in push-luck) & Criteria Gates remain on the table.
 
-## THE OPEN QUESTION — next playtest verdict (post B10–B14)
+## THE OPEN QUESTION — next playtest verdict (post B10–B15)
 
 Both confirmed needs from the 2026-05-19 verdict are now SHIPPED:
 A (active skill) = B10 The Cut; B (strategy depth) = B11 The Web +
