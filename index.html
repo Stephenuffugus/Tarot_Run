@@ -430,6 +430,45 @@ body::after{
   60% { transform: translate(-3px, 1px); }
   100% { transform: translate(0,0); filter: brightness(1); }
 }
+/* B14 — enemy ATTACKING the player: a walked-through strike, not a flash */
+.enemy-portrait.attacking{ animation: enemyAttack 440ms cubic-bezier(.5,-0.35,.3,1.4); z-index:6; }
+@keyframes enemyAttack{
+  0%   { transform: translate(0,0) scale(1); }
+  35%  { transform: translate(0,-12px) scale(1.06); filter: brightness(1.5) saturate(1.4); }
+  56%  { transform: translate(-4px,40px) scale(1.13); filter: brightness(1.8); }
+  72%  { transform: translate(0,26px) scale(1.08); }
+  100% { transform: translate(0,0) scale(1); filter: brightness(1); }
+}
+.combat-shake{ animation: shake 380ms ease-in-out; }
+#strike-fx{ position:fixed; inset:0; z-index:80; pointer-events:none;
+  display:flex; align-items:center; justify-content:center; }
+#strike-fx .sfx-flash{ position:absolute; inset:0;
+  background: radial-gradient(circle at 50% 58%, rgba(150,16,16,0) 28%, rgba(150,16,16,0.40) 100%);
+  animation: sfxFlash 520ms ease-out forwards; }
+#strike-fx .sfx-flash.soft{ background: radial-gradient(circle at 50% 58%, rgba(150,16,16,0) 40%, rgba(120,90,30,0.30) 100%); }
+#strike-fx .sfx-slash{ position:absolute; left:50%; top:54%; width:128%; height:5px;
+  background: linear-gradient(90deg, transparent, rgba(255,212,172,0.95), transparent);
+  transform: translate(-50%,-50%) rotate(-17deg) scaleX(0);
+  animation: sfxSlash 360ms ease-out forwards; }
+#strike-fx .sfx-num{ font-family: var(--font-display); font-size:54px; font-weight:700;
+  color: var(--blood-bright); text-shadow:0 2px 14px rgba(0,0,0,.85);
+  animation: sfxNum 920ms ease-out forwards; }
+#strike-fx .sfx-num.blocked{ color: var(--ornament-gold); font-size:32px; }
+@keyframes sfxFlash{ 0%{opacity:0} 22%{opacity:1} 100%{opacity:0} }
+@keyframes sfxSlash{ 0%{transform:translate(-50%,-50%) rotate(-17deg) scaleX(0);opacity:0}
+  42%{opacity:1} 62%{transform:translate(-50%,-50%) rotate(-17deg) scaleX(1)}
+  100%{opacity:0;transform:translate(-50%,-50%) rotate(-17deg) scaleX(1)} }
+@keyframes sfxNum{ 0%{transform:translateY(22px) scale(.6);opacity:0}
+  24%{transform:translateY(0) scale(1.15);opacity:1} 68%{opacity:1}
+  100%{transform:translateY(-36px) scale(1);opacity:0} }
+/* B14 — banish: the chosen card is destroyed on-screen (it WAS your pick) */
+.card-destroy{ pointer-events:none; animation: cardDestroy 760ms ease-in forwards; }
+@keyframes cardDestroy{
+  0%   { transform: translateY(0) scale(1) rotate(0); filter: brightness(1); opacity:1; }
+  24%  { transform: translateY(-28px) scale(1.09) rotate(-3deg); filter: brightness(1.7) saturate(1.6); }
+  54%  { transform: translateY(-14px) scale(1.02) rotate(3deg); filter: brightness(2.1) sepia(.6) hue-rotate(-18deg); opacity:.9; }
+  100% { transform: translateY(30px) scale(.55) rotate(9deg); filter: brightness(.15) blur(3px); opacity:0; }
+}
 
 .enemy-name{
   font-family: var(--font-display); font-size: 20px;
@@ -961,7 +1000,7 @@ body::after{
    ========================================================================= */
 
 const VERSION = 1;
-const BUILD = 'B13 · THE CHANNEL';  // visible on title; read it back to confirm you're current
+const BUILD = 'B14 · THE STRIKE';  // visible on title; read it back to confirm you're current
 const SAVE_KEY = 'tarot-run-v1';
 
 /* ----- SEEDABLE RNG ----- */
@@ -2550,9 +2589,16 @@ function showBanishModal(){
     const el = renderCardElement(card, { reversed: entry.reversed });
     el.classList.add('playable');
     el.onclick = () => {
-      state.run.deck.splice(idx, 1);
-      veil.classList.remove('active');
-      advanceFloor();
+      if(m._busy) return; m._busy = true;
+      // it WAS your pick — show it being destroyed so you know it worked
+      el.classList.add('card-destroy');
+      grid.querySelectorAll('.card').forEach(c => { if(c !== el){ c.style.opacity = '0.22'; c.style.pointerEvents = 'none'; } });
+      const finish = () => {
+        state.run.deck.splice(idx, 1);
+        veil.classList.remove('active');
+        advanceFloor();
+      };
+      if(typeof setTimeout === 'function') setTimeout(finish, 780); else finish();
     };
     grid.appendChild(el);
   });
@@ -2560,7 +2606,7 @@ function showBanishModal(){
   const c = document.createElement('div');
   c.className = 'modal-choice';
   c.innerHTML = `<div class="mc-icon">⛒</div><div class="mc-text"><strong>Never mind</strong></div>`;
-  c.onclick = () => { veil.classList.remove('active'); advanceFloor(); };
+  c.onclick = () => { if(m._busy) return; m._busy = true; veil.classList.remove('active'); advanceFloor(); };
   cancel.appendChild(c);
 }
 
@@ -3192,7 +3238,39 @@ document.getElementById('btn-daily').onclick = () => {
   showScreen('map-screen');
   renderMap();
 };
-document.getElementById('btn-end-turn').onclick = () => endTurn();
+// B14 — walk the enemy's strike through visually. endTurn() stays fully
+// synchronous (tests rely on it); this only PACES the reveal of a result
+// that already happened. UI-only + rAF-guarded → engine/tests untouched.
+function playStrikeFX(intent, dmg){
+  const wasAttack = !!(intent && intent.type === 'attack');
+  const portrait = document.getElementById('enemy-portrait');
+  const screen = document.getElementById('combat-screen') || document.body;
+  if(portrait){ portrait.classList.remove('attacking'); void portrait.offsetWidth; portrait.classList.add('attacking'); }
+  setTimeout(() => {
+    if(screen){ screen.classList.remove('combat-shake'); void screen.offsetWidth;
+      if(dmg > 0) screen.classList.add('combat-shake'); }
+    const fx = document.createElement('div'); fx.id = 'strike-fx';
+    const soft = !(dmg > 0);
+    let html = `<div class="sfx-flash${soft?' soft':''}"></div>`;
+    if(dmg > 0 || wasAttack) html += `<div class="sfx-slash"></div>`;
+    if(dmg > 0) html += `<div class="sfx-num">−${dmg}</div>`;
+    else if(wasAttack) html += `<div class="sfx-num blocked">⛨ BLOCKED</div>`;
+    fx.innerHTML = html;
+    document.body.appendChild(fx);
+    setTimeout(() => { fx.remove(); if(screen) screen.classList.remove('combat-shake'); }, 950);
+  }, 230);
+}
+function endTurnWithFX(){
+  const r = state.run;
+  if(!r || !r.combat || !r.combatPlayer || !r.combatEnemy){ endTurn(); return; }
+  const intent = Object.assign({}, r.combatEnemy.intent);
+  const hpBefore = r.combatPlayer.hp;
+  endTurn(); // engine resolves synchronously
+  if(typeof requestAnimationFrame !== 'function') return;
+  if(!state.run.combat || state.run.combatPlayer.hp <= 0 || state.run.combatEnemy.hp <= 0) return;
+  playStrikeFX(intent, hpBefore - state.run.combatPlayer.hp);
+}
+document.getElementById('btn-end-turn').onclick = endTurnWithFX;
 document.getElementById('btn-flee-map').onclick = () => {
   if(confirm('Leave the tower? Your run will end.')){
     state.run = null;
