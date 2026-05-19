@@ -108,3 +108,23 @@ const off=gplay('swords-2');// off-suit: chain resets to swords1 -> pierce 3
 const d=gplay('wands-2');   // wands chain reset to 1 -> +0 -> 5
 console.log(`  Wands chain: ${a}, ${b} (expect 5,7); off-suit Swords ${off} (expect 3); Wands after reset ${d} (expect 5)`);
 console.log('  RESULT:', (a===5&&b===7&&off===3&&d===5) ? 'PASS — Chain escalates +2/step and resets on suit change' : 'FAIL');
+
+console.log('\n--- TEST H: Wands lay Ember, the detonator cashes it in ---');
+const hr = game.freshRun('web-seed', 'magician'); game.state.run = hr;
+hr.floor = 0; hr.path[0].chosenNode = 0; hr.currentNode = hr.path[0].nodes[0];
+game.startCombat(hr.path[0].nodes[0].enemyId);
+const hpl=()=>hr.combatPlayer, hen=()=>hr.combatEnemy;
+hen().hp = 999; hen().maxHp = 999; hen().debuffs = {};
+function hplay(cardId){
+  // reset The Chain each time so the Ember math is isolated from chain bonus
+  hr.combat.chainSuit = null; hr.combat.chainCount = 0;
+  hpl().hand.unshift({ cardId, reversed:false }); hpl().energy = 9;
+  const h = hen().hp; game.playCard(0); return h - hen().hp;
+}
+const lay = hplay('wands-4');                 // Strike 5, applies 1 Ember
+const emberLaid = hen().debuffs.burn || 0;    // expect 1
+const det = hplay('wands-9');                 // consume 1 Ember -> 9 + 3*1 = 12
+const emberAfter = hen().debuffs.burn || 0;   // expect 0 (consumed)
+console.log(`  wands-4: dmg=${lay} (expect 5), Ember laid=${emberLaid} (expect 1)`);
+console.log(`  wands-9 detonate: dmg=${det} (expect 12), Ember after=${emberAfter} (expect 0)`);
+console.log('  RESULT:', (lay===5 && emberLaid===1 && det===12 && emberAfter===0) ? 'PASS — Ember lays and detonates' : 'FAIL');

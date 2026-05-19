@@ -953,7 +953,7 @@ body::after{
    ========================================================================= */
 
 const VERSION = 1;
-const BUILD = 'B10 · THE CUT';  // visible on title; read it back to confirm you're current
+const BUILD = 'B11 · THE WEB';  // visible on title; read it back to confirm you're current
 const SAVE_KEY = 'tarot-run-v1';
 
 /* ----- SEEDABLE RNG ----- */
@@ -1036,15 +1036,27 @@ const SUIT_FACTORIES = {
       id: `wands-${n}`, name: minorName('wands', n), suit: 'wands', arcanaNum: n,
       glyph: SUIT_GLYPH.wands, rarity: n<=3 ? 'starter' : (n<=7 ? 'common' : (n<=10 ? 'uncommon' : 'rare')),
     };
-    if(n <= 10){
-      const dmg = 3 + n;  // 4..13
-      const cost = n <= 2 ? 0 : (n <= 6 ? 1 : (n <= 9 ? 2 : 3));
-      return { ...base, cost,
-        desc: `Strike ${dmg}.`,
-        flavor: ['A spark from nothing.','Tinder finds tinder.','The torch is steady.','The hearth swells.','The brand awakens.','The flame leans.','Heat without smoke.','The bonfire calls.','A pillar of light.','Conflagration.'][n-1],
-        play(ctx){ return dealDamage(ctx, dmg); }
-      };
+    // 1–3: clean baseline (stable early curve + regression anchor)
+    if(n <= 3){ const dmg = 3 + n; const cost = n <= 2 ? 0 : 1;
+      return { ...base, cost, desc: `Strike ${dmg}.`,
+        flavor: ['A spark from nothing.','Tinder finds tinder.','The torch is steady.'][n-1],
+        play(ctx){ return dealDamage(ctx, dmg); } };
     }
+    // 4–10: the EMBER engine — lay fire, then detonate it (feeds Swords too)
+    if(n === 4) return { ...base, cost:1, desc:'Strike 5. Apply 1 Ember.', flavor:'The first cinder catches.',
+      play(ctx){ return combine(dealDamage(ctx,5), applyBurn(ctx,1)); } };
+    if(n === 5) return { ...base, cost:1, desc:'Strike 6. If the enemy burns, draw 1.', flavor:'Read the smoke.',
+      play(ctx){ const r = dealDamage(ctx,6); return (ctx.enemy.debuffs.burn>0) ? combine(r, drawCards(ctx,1)) : r; } };
+    if(n === 6) return { ...base, cost:1, desc:'Strike 4. Apply 2 Ember.', flavor:'Feed it, then stand back.',
+      play(ctx){ return combine(dealDamage(ctx,4), applyBurn(ctx,2)); } };
+    if(n === 7) return { ...base, cost:2, desc:'Strike 8, then Strike again equal to the enemy’s Ember.', flavor:'The fire turns on its host.',
+      play(ctx){ const e = ctx.enemy.debuffs.burn||0; return combine(dealDamage(ctx,8), dealDamage(ctx,e)); } };
+    if(n === 8) return { ...base, cost:2, desc:'Strike 10. Apply 1 Ember.', flavor:'A measured burn.',
+      play(ctx){ return combine(dealDamage(ctx,10), applyBurn(ctx,1)); } };
+    if(n === 9) return { ...base, cost:2, desc:'Detonate: consume all Ember, Strike 9 + 3 per Ember consumed.', flavor:'Everything the fire was owed, at once.',
+      play(ctx){ const e = ctx.enemy.debuffs.burn||0; ctx.enemy.debuffs.burn = 0; return dealDamage(ctx, 9 + 3*e); } };
+    if(n === 10) return { ...base, cost:3, desc:'Strike 14. Apply 3 Ember.', flavor:'The pyre stands tall.',
+      play(ctx){ return combine(dealDamage(ctx,14), applyBurn(ctx,3)); } };
     if(n === 11) return { ...base, cost: 1, desc: 'Strike 6. Draw 1.', flavor: 'The squire learns by burning.',
       play(ctx){ return combine(dealDamage(ctx, 6), drawCards(ctx, 1)); } };
     if(n === 12) return { ...base, cost: 2, desc: 'Strike 12. If enemy at full HP, +6 more.', flavor: 'Charge before the spell is named.',
@@ -1061,18 +1073,27 @@ const SUIT_FACTORIES = {
       id: `cups-${n}`, name: minorName('cups', n), suit: 'cups', arcanaNum: n,
       glyph: SUIT_GLYPH.cups, rarity: n<=3 ? 'starter' : (n<=7 ? 'common' : (n<=10 ? 'uncommon' : 'rare')),
     };
-    if(n <= 10){
-      const heal = 1 + Math.floor(n * 0.7);  // 1..8
-      const draw = n >= 7 ? 1 : 0;
-      const cost = n <= 2 ? 0 : (n <= 6 ? 1 : (n <= 9 ? 2 : 2));
-      const eff = [`Heal ${heal}.`];
-      if(draw) eff.push(`Draw ${draw}.`);
-      return { ...base, cost,
-        desc: eff.join(' '),
-        flavor: ['A first sip.','The well remembers.','The tide turns.','A toast among friends.','Spilled, but not lost.','Reflected in stillness.','Three drowned, three saved.','Cup of seven faces.','Almost full.','Brimming over.'][n-1],
-        play(ctx){ return combine(healPlayer(ctx, heal), draw ? drawCards(ctx, draw) : null); }
-      };
+    // 1–3: clean baseline
+    if(n <= 3){ const heal = 1 + Math.floor(n * 0.7); const cost = n <= 2 ? 0 : 1;
+      return { ...base, cost, desc:`Heal ${heal}.`,
+        flavor: ['A first sip.','The well remembers.','The tide turns.'][n-1],
+        play(ctx){ return healPlayer(ctx, heal); } };
     }
+    // 4–10: sustain that turns into PRESSURE (Ward engine + heal→damage bridge)
+    if(n === 4) return { ...base, cost:1, desc:'Heal 3. Gain 4 Ward.', flavor:'Still water turns the blade.',
+      play(ctx){ return combine(healPlayer(ctx,3), applyBuff(ctx,'ward',4)); } };
+    if(n === 5) return { ...base, cost:1, desc:'Heal 4. Gain Resolve (block at turn end).', flavor:'Grief, made useful.',
+      play(ctx){ return combine(healPlayer(ctx,4), applyBuff(ctx,'resolve',1)); } };
+    if(n === 6) return { ...base, cost:1, desc:'Heal 3. Gain 5 Ward.', flavor:'The mirror holds.',
+      play(ctx){ return combine(healPlayer(ctx,3), applyBuff(ctx,'ward',5)); } };
+    if(n === 7) return { ...base, cost:2, desc:'Heal 5. Draw 1.', flavor:'A cup passed around.',
+      play(ctx){ return combine(healPlayer(ctx,5), drawCards(ctx,1)); } };
+    if(n === 8) return { ...base, cost:2, desc:'Heal 4. Gain 5 Ward. Draw 1.', flavor:'Seven faces, one will.',
+      play(ctx){ return combine(healPlayer(ctx,4), applyBuff(ctx,'ward',5), drawCards(ctx,1)); } };
+    if(n === 9) return { ...base, cost:2, desc:'Heal 6. If you have healed 12+ this combat, Strike 8.', flavor:'The wish, paid forward as a wound.',
+      play(ctx){ const r = healPlayer(ctx,6); return ((ctx.combat&&ctx.combat.healedThisCombat||0) >= 12) ? combine(r, dealDamage(ctx,8)) : r; } };
+    if(n === 10) return { ...base, cost:2, desc:'Heal 8, then Strike equal to half the HP you have healed this combat (max 12).', flavor:'The flood remembers every shore.',
+      play(ctx){ const r = healPlayer(ctx,8); const dmg = Math.min(12, Math.floor((ctx.combat&&ctx.combat.healedThisCombat||0)/2)); return combine(r, dealDamage(ctx,dmg)); } };
     if(n === 11) return { ...base, cost: 0, desc: 'Draw 2.', flavor: 'The young one offers a wave.',
       play(ctx){ return drawCards(ctx, 2); } };
     if(n === 12) return { ...base, cost: 1, desc: 'Heal 6. Gain Resolve (+block at turn end).', flavor: 'A knight returns from drowning.',
@@ -1089,15 +1110,27 @@ const SUIT_FACTORIES = {
       id: `swords-${n}`, name: minorName('swords', n), suit: 'swords', arcanaNum: n,
       glyph: SUIT_GLYPH.swords, rarity: n<=3 ? 'starter' : (n<=7 ? 'common' : (n<=10 ? 'uncommon' : 'rare')),
     };
-    if(n <= 10){
-      const pierce = 2 + Math.floor(n * 0.8);  // 2..10
-      const cost = n <= 2 ? 0 : (n <= 6 ? 1 : (n <= 9 ? 2 : 3));
-      return { ...base, cost,
-        desc: `Pierce ${pierce}. Ignores Block.`,
-        flavor: ['The first draw.','The duel begins.','A clean cut.','Restless dreams.','Defeat in three breaths.','Crossing the river.','Stolen blade.','Bound in irons.','Wakened from sorrow.','Ruin, repeated.'][n-1],
-        play(ctx){ return dealPierce(ctx, pierce); }
-      };
+    // 1–3: clean baseline
+    if(n <= 3){ const pierce = 2 + Math.floor(n * 0.8); const cost = n <= 2 ? 0 : 1;
+      return { ...base, cost, desc:`Pierce ${pierce}. Ignores Block.`,
+        flavor: ['The first draw.','The duel begins.','A clean cut.'][n-1],
+        play(ctx){ return dealPierce(ctx, pierce); } };
     }
+    // 4–10: apply debuffs, then CASH THEM IN (detonates Wands’ Ember too)
+    if(n === 4) return { ...base, cost:1, desc:'Pierce 4. Apply Weak 1.', flavor:'Cut the arm, not the man.',
+      play(ctx){ return combine(dealPierce(ctx,4), applyDebuff(ctx,'weak',1)); } };
+    if(n === 5) return { ...base, cost:1, desc:'Pierce 5. Apply Vulnerable 1.', flavor:'Open the seam.',
+      play(ctx){ return combine(dealPierce(ctx,5), applyDebuff(ctx,'vulnerable',1)); } };
+    if(n === 6) return { ...base, cost:1, desc:'Pierce 6. +2 damage per Ember on the enemy.', flavor:'Drive the blade through the burn.',
+      play(ctx){ const e = ctx.enemy.debuffs.burn||0; return dealPierce(ctx, 6 + 2*e); } };
+    if(n === 7) return { ...base, cost:2, desc:'Pierce 7. +2 damage per debuff on the enemy.', flavor:'A wound knows its kin.',
+      play(ctx){ const dc = Object.entries(ctx.enemy.debuffs).filter(([k,v])=>v>0 && k!=='strength').length; return dealPierce(ctx, 7 + 2*dc); } };
+    if(n === 8) return { ...base, cost:2, desc:'Pierce 7. Apply Weak 1 and Vulnerable 1.', flavor:'Both knees, then the throat.',
+      play(ctx){ return combine(dealPierce(ctx,7), applyDebuff(ctx,'weak',1), applyDebuff(ctx,'vulnerable',1)); } };
+    if(n === 9) return { ...base, cost:2, desc:'Pierce 12. If the enemy is Vulnerable, draw 1.', flavor:'Finish what was opened.',
+      play(ctx){ const r = dealPierce(ctx,12); return (ctx.enemy.debuffs.vulnerable>0) ? combine(r, drawCards(ctx,1)) : r; } };
+    if(n === 10) return { ...base, cost:3, desc:'Pierce 9. +3 damage per debuff on the enemy.', flavor:'The reckoning, itemised.',
+      play(ctx){ const dc = Object.entries(ctx.enemy.debuffs).filter(([k,v])=>v>0 && k!=='strength').length; return dealPierce(ctx, 9 + 3*dc); } };
     if(n === 11) return { ...base, cost: 1, desc: 'Pierce 4. Apply Weak (1 turn).', flavor: 'Watch the eyes, not the blade.',
       play(ctx){ return combine(dealPierce(ctx, 4), applyDebuff(ctx, 'weak', 1)); } };
     if(n === 12) return { ...base, cost: 1, desc: 'Pierce 8.', flavor: 'A reckless charge, but true.',
@@ -1114,15 +1147,27 @@ const SUIT_FACTORIES = {
       id: `pents-${n}`, name: minorName('pents', n), suit: 'pents', arcanaNum: n,
       glyph: SUIT_GLYPH.pents, rarity: n<=3 ? 'starter' : (n<=7 ? 'common' : (n<=10 ? 'uncommon' : 'rare')),
     };
-    if(n <= 10){
-      const block = 3 + n;  // 4..13
-      const cost = n <= 2 ? 0 : (n <= 6 ? 1 : (n <= 9 ? 2 : 2));
-      return { ...base, cost,
-        desc: `Block ${block}.`,
-        flavor: ['A coin from the dirt.','Two coins, juggled.','Three crafts joined.','Held too tightly.','Locked out, looking in.','Wealth shared, mostly.','Patient husbandry.','Apprentice in earnest.','Garden full and quiet.','The estate complete.'][n-1],
-        play(ctx){ return gainBlock(ctx, block); }
-      };
+    // 1–3: clean baseline
+    if(n <= 3){ const block = 3 + n; const cost = n <= 2 ? 0 : 1;
+      return { ...base, cost, desc:`Block ${block}.`,
+        flavor: ['A coin from the dirt.','Two coins, juggled.','Three crafts joined.'][n-1],
+        play(ctx){ return gainBlock(ctx, block); } };
     }
+    // 4–10: the BULWARK — a wall that becomes a fist (pairs with Cups’ Ward)
+    if(n === 4) return { ...base, cost:1, desc:'Block 6. If you have Ward, gain 3 more Block.', flavor:'Stone behind the water.',
+      play(ctx){ const b = 6 + ((ctx.player.buffs.ward||0) > 0 ? 3 : 0); return gainBlock(ctx, b); } };
+    if(n === 5) return { ...base, cost:1, desc:'Block 7. Strike 3.', flavor:'The shield has an edge.',
+      play(ctx){ return combine(gainBlock(ctx,7), dealDamage(ctx,3)); } };
+    if(n === 6) return { ...base, cost:1, desc:'Block 5, then Strike equal to a quarter of your Block.', flavor:'Lean the whole wall forward.',
+      play(ctx){ const b = gainBlock(ctx,5); return combine(b, dealDamage(ctx, Math.floor(ctx.player.block * 0.25))); } };
+    if(n === 7) return { ...base, cost:2, desc:'Block 10. Strike 5.', flavor:'Hold, then answer.',
+      play(ctx){ return combine(gainBlock(ctx,10), dealDamage(ctx,5)); } };
+    if(n === 8) return { ...base, cost:2, desc:'Block 8. Gain 1 Plate (permanent +2 Block).', flavor:'Lay another course of stone.',
+      play(ctx){ return combine(gainBlock(ctx,8), applyBuff(ctx,'plate',1)); } };
+    if(n === 9) return { ...base, cost:2, desc:'Strike equal to half your Block, then Block 6.', flavor:'The estate collects its debts.',
+      play(ctx){ const r = dealDamage(ctx, Math.floor(ctx.player.block / 2)); return combine(r, gainBlock(ctx,6)); } };
+    if(n === 10) return { ...base, cost:2, desc:'Block 13, then Strike equal to a third of your Block.', flavor:'The keep, and the sortie.',
+      play(ctx){ const b = gainBlock(ctx,13); return combine(b, dealDamage(ctx, Math.floor(ctx.player.block / 3))); } };
     if(n === 11) return { ...base, cost: 1, desc: 'Block 7. Gain 5 gold.', flavor: 'The student counts twice.',
       play(ctx){ ctx.player.gold += 5; return combine(gainBlock(ctx, 7), {goldGained:5}); } };
     if(n === 12) return { ...base, cost: 2, desc: 'Block 14.', flavor: 'A slow journey, but unbroken.',
@@ -1546,16 +1591,31 @@ const PATRONS = {
     tagline:'Defense & dominion. Start each combat with 6 Block. Pentacles — a wall that punches back.' },
 };
 
-// Recipe: 9 of the primary suit (low curve) + 2 of each other suit + The Fool = 16.
+/* Bespoke 16-card starter decks. Each is a different *texture*, not the
+   same template re-suited, and each carries a turn-1 combo seed so the
+   synergy is felt in the first hand. Power level is held even (16 cards,
+   low curve, ~one off-suit splash that sets up the engine). */
+const PATRON_DECKS = {
+  // Magician — tempo fire: lay Ember, detonate it; Swords cracks it open.
+  wands: ['wands-1','wands-1','wands-2','wands-3','wands-4','wands-4','wands-5',
+          'wands-6','wands-9','swords-5','swords-2','cups-2','cups-1',
+          'pents-2','pents-1','major-0'],
+  // Priestess — control: stack Weak/Vuln, then cash the debuffs in.
+  swords:['swords-1','swords-1','swords-2','swords-3','swords-4','swords-5',
+          'swords-6','swords-7','swords-3','wands-2','wands-4','cups-2',
+          'cups-1','pents-2','pents-1','major-0'],
+  // Empress — sustain that blooms: heal, build Ward, turn it into damage.
+  cups:  ['cups-1','cups-1','cups-2','cups-3','cups-4','cups-5','cups-6',
+          'cups-9','cups-3','pents-4','pents-2','pents-1','swords-2',
+          'wands-2','wands-1','major-0'],
+  // Emperor — the wall punches: bank Block, then spend it as a fist.
+  pents: ['pents-1','pents-1','pents-2','pents-3','pents-4','pents-5','pents-6',
+          'pents-9','pents-3','swords-5','swords-2','cups-2','cups-1',
+          'wands-2','wands-1','major-0'],
+};
 function buildPatronDeck(primary){
-  const suits = ['wands','cups','swords','pents'];
-  const deck = [];
-  [1,1,2,2,3,3,4,4,5].forEach(n => deck.push({ cardId:`${primary}-${n}`, reversed:false }));
-  suits.filter(s => s !== primary).forEach(s => {
-    [1,2].forEach(n => deck.push({ cardId:`${s}-${n}`, reversed:false }));
-  });
-  deck.push({ cardId:'major-0', reversed:false }); // The Fool
-  return deck;
+  const ids = PATRON_DECKS[primary] || PATRON_DECKS.wands;
+  return ids.map(id => ({ cardId:id, reversed:false }));
 }
 
 /* ============ THE SPREAD — persistent Arcana boons ============
