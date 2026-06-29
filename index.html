@@ -1170,7 +1170,7 @@ body::after{
    ========================================================================= */
 
 const VERSION = 1;
-const BUILD = 'B31 · THE DAILY SPREAD';  // visible on title; read it back to confirm you're current
+const BUILD = 'B32 · FIRST LIGHT';  // visible on title; read it back to confirm you're current
 const SAVE_KEY = 'tarot-run-v1';
 
 /* ----- SEEDABLE RNG ----- */
@@ -2264,6 +2264,13 @@ function startCombat(enemyId){
   showScreen('combat-screen');
   resetCombatFXState();   // B19 — don't FX the first paint off the last fight's numbers
   renderCombat();
+  // B32 — first fight ever: teach the essentials (incl. the hidden long-press verb).
+  teachOnce('combatBasics', {
+    title: 'The Reading Begins',
+    sub: 'Spend your hand to break the keeper before it breaks you.',
+    body: 'Each turn you have <b>energy</b> to play cards. The enemy shows its next move as an <b>intent</b> — block it or out-race it. Unplayed cards <b>discard</b> at end of turn, so spend fully.<br><br><b>Long-press</b> (or right-click) any card to inspect it — and to <b>Channel</b> it to your Patron once per turn instead of playing it.',
+    icon: '☼', label: 'Begin'
+  });
   return ctx;
 }
 
@@ -2370,11 +2377,23 @@ function playCard(handIdx){
       _pb.textContent = `THE READING · ${_pos} foretold ✦`;
       _pb.classList.remove('show'); void _pb.offsetWidth; _pb.classList.add('show');
     }
+    if(ctx.combat.prophecyProgress === 1){
+      teachOnce('prophecy', {
+        title: 'The Prophecy', sub: 'The Reading foretells three suits.',
+        body: 'Your Reading names a sequence — <b>Past · Present · Future</b>. Play Minors of those suits <b>in order</b> (any turns). Off-suit never resets it, so it only ever moves forward. Complete all three for a one-time payoff: <b>heal, a strike, and +1 max energy</b>.',
+        icon: '☽', label: 'I\'ll follow it'
+      });
+    }
   }
 
   // Loud, legible feedback so the combo is *felt*. Chain 3 is the
   // Aspect moment — let triggerAspect own the banner there.
   if(MINOR && ctx.combat.chainCount >= 2 && ctx.combat.chainCount !== 3){
+    teachOnce('chain', {
+      title: 'The Chain', sub: 'Same suit, again and again.',
+      body: 'Playing Minors of the <b>same suit in a row</b> builds a Chain — each link adds escalating power (<b>+3 / +6 / +10 / +15</b>). Off-suit breaks it; Majors are wild. A chain of <b>3</b> detonates that suit\'s <b>Aspect</b> — a loud payoff.',
+      icon: '⛓', label: 'Keep the chain'
+    });
     showChainBanner(card.suit, ctx.combat.chainCount, chainBonusFor(ctx.combat.chainCount));
   }
 
@@ -3595,6 +3614,7 @@ function renderHand(){
   const handEl = document.getElementById('hand');
   handEl.innerHTML = '';
   const ctx = getCtx();
+  let sawShadow = false;
   ctx.player.hand.forEach((entry, idx) => {
     const card = CARD_BY_ID[entry.cardId];
     const isMinor = card.suit==='wands'||card.suit==='cups'||card.suit==='swords'||card.suit==='pents';
@@ -3602,6 +3622,7 @@ function renderHand(){
     // real different effect, full cost). Legacy fate path (no authored
     // face: curses etc.) keeps B15's −1 cost / weaker behaviour.
     const hasShadow = isMinor && entry.reversed && !!card.reversedPlay;
+    if(hasShadow) sawShadow = true;
     const fateRev   = isMinor && entry.reversed && !card.reversedPlay;
     // Hand stays READABLE (no 180° flip) — the face is shown by a ribbon.
     const el = renderCardElement(card, { reversed: false, shadow: hasShadow });
@@ -3639,6 +3660,12 @@ function renderHand(){
     el.addEventListener('touchmove', () => { if(pressTimer) clearTimeout(pressTimer); });
     el.oncontextmenu = (e) => { e.preventDefault(); showCardInspect(card, entry); };
     handEl.appendChild(el);
+  });
+  // B32 — first time a Shadow face appears in hand, explain the orientation flip.
+  if(sawShadow) teachOnce('shadow', {
+    title: 'The Shadow Face', sub: 'A card drew Reversed (↻).',
+    body: 'This card flipped to its <b>Shadow</b> — same cost, but its suit role <b>inverts</b> (a striker lays embers, a wall throws a fist, a healer wards…). It opens combos the upright face can\'t. Long-press to inspect <b>both</b> faces.',
+    icon: '↻', label: 'Embrace it'
   });
 }
 
@@ -4210,6 +4237,23 @@ function migrateMeta(){
   if(m.discoveredCards == null) m.discoveredCards = {};
   if(m.bestScore == null) m.bestScore = 0;     // B30
   if(m.daily == null) m.daily = {};            // B31 — { lastPlayed, lastScore, streak }
+  if(m.taught == null) m.taught = {};          // B32 — which systems we've taught
+}
+
+// B32 · FIRST LIGHT — progressive disclosure. Teach each system ONCE, at
+// the moment it first becomes relevant (the genre's churn killer is six
+// esoteric systems dumped on you at floor 0). meta.taught[id] persists
+// across runs; rAF-gated so sim/test/old-save paths never see a modal.
+function teachOnce(id, cfg){
+  if(typeof requestAnimationFrame !== 'function') return false;  // inert under stub DOM
+  state.meta.taught = state.meta.taught || {};
+  if(state.meta.taught[id]) return false;
+  state.meta.taught[id] = true; saveState();
+  showModal({
+    title: cfg.title, sub: cfg.sub || '', body: cfg.body,
+    choices: [{ icon: cfg.icon || '✦', label: cfg.label || 'I see', onClick: cfg.onClose || (()=>{}) }]
+  });
+  return true;
 }
 // Insight earned at the end of a run — you always progress, win or lose.
 function awardInsight(victory){
@@ -4256,11 +4300,16 @@ function startRun(patronId, seed){
   renderMap();
 }
 function choosePatron(){
+  // B32 — gently steer a brand-new player to the most straightforward Patron
+  // (tempo/aggression) so the first reading isn't a paralysis of choice.
+  const firstRun = (state.meta.runsAttempted || 0) === 0;
   showModal({
     title: 'Who reads you?',
     sub: 'Choose your Patron. They set your hand, your gift, and your road.',
     choices: Object.values(PATRONS).map(p => ({
-      icon: p.glyph, label: p.name, note: p.tagline,
+      icon: p.glyph,
+      label: p.name + (firstRun && p.id === 'magician' ? '  ·  ★ a good first reading' : ''),
+      note: p.tagline,
       onClick: () => chooseVeil(p.id)
     }))
   });
