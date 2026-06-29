@@ -182,6 +182,9 @@ body::after{
 .btn.danger{ border-color: var(--blood); color: var(--blood-bright); }
 .btn.danger::before, .btn.danger::after{ border-color: var(--blood); }
 .btn.tiny{ padding: 6px 12px; font-size: 12px; letter-spacing: 0.06em; }
+.btn.dim{ opacity: 0.5; }
+.rs-daily{ text-align:center; font-family:var(--font-display); letter-spacing:0.08em;
+  color:var(--ornament-gold); margin-bottom:10px; font-size:15px; }
 .btn.icon{ padding: 8px 12px; min-width: 40px; }
 .btn:disabled{ opacity: 0.36; pointer-events: none; }
 
@@ -1167,7 +1170,7 @@ body::after{
    ========================================================================= */
 
 const VERSION = 1;
-const BUILD = 'B30 · THE RECKONING';  // visible on title; read it back to confirm you're current
+const BUILD = 'B31 · THE DAILY SPREAD';  // visible on title; read it back to confirm you're current
 const SAVE_KEY = 'tarot-run-v1';
 
 /* ----- SEEDABLE RNG ----- */
@@ -2954,16 +2957,85 @@ function showRunSummary(victory){
   const list = rows.map(r => `<div class="rs-row"><span>${r[0]}</span><b>${r[1]}</b></div>`).join('');
   const scoreLine = `<div class="rs-score">SCORE <b>${score}</b> ${isRecord ? '<span class="rs-record">★ NEW BEST</span>' : `<span class="rs-best">best ${prevBest}</span>`}</div>`;
 
-  const choices = [
-    { label: 'Return to the Library', onClick: () => { state.run = null; saveState(); showScreen('title-screen'); refreshTitle(); } }
-  ];
+  // B31 — record the Daily's result (the day was locked at START; this just
+  // stores the score the title screen brags with).
+  const isDaily = !!(run && run.daily);
+  if(isDaily){
+    state.meta.daily.lastScore = score;
+    state.meta.daily.lastResult = victory ? 'win' : 'loss';
+    saveState();
+  }
 
-  showModal({
-    title: victory ? 'The Crown Falls' : 'The Reading Cuts',
-    sub: victory ? `You climbed the whole Tower${(run && run.veil) ? ` under ${VEILS[run.veil].name}` : ''}.` : 'Every reading teaches. Spend Insight at The Mirror.',
-    body: `${veilLine}${list}${scoreLine}`,
-    choices, hideClose: true
-  });
+  // Inner render so the "Share" button can re-paint WITHOUT redoing any of
+  // the bookkeeping above (which would double-count attempts/unlocks).
+  function render(copied){
+    const choices = [];
+    if(isDaily){
+      choices.push({ icon:'⎘', label: copied ? '✓ Copied — paste it anywhere' : 'Share this reading',
+        note: copied ? '' : 'A spoiler-free result to brag with',
+        onClick: () => { copyDailyShare(victory, score, depth); render(true); } });
+    }
+    choices.push({ label: 'Return to the Library', onClick: () => { state.run = null; saveState(); showScreen('title-screen'); refreshTitle(); } });
+    showModal({
+      title: victory ? 'The Crown Falls' : 'The Reading Cuts',
+      sub: victory ? `You climbed the whole Tower${(run && run.veil) ? ` under ${VEILS[run.veil].name}` : ''}.` : 'Every reading teaches. Spend Insight at The Mirror.',
+      body: `${isDaily ? `<div class="rs-daily">🔮 Daily Spread</div>` : ''}${veilLine}${list}${scoreLine}`,
+      choices, hideClose: true
+    });
+  }
+  render(false);
+}
+
+// ===== B31 · THE DAILY SPREAD — one shared tower a day, one attempt, a
+// seed-chosen Patron, and a copyable spoiler-free brag. The daily ritual +
+// score chase + the game's only word-of-mouth lever. =====
+function daySeedFor(d){ return `daily-${d.getUTCFullYear()}-${d.getUTCMonth()+1}-${d.getUTCDate()}`; }
+function todaySeed(){ return daySeedFor(new Date()); }
+function dailyPatronFor(seed){ const ids = Object.keys(PATRONS); return ids[strHash(seed) % ids.length]; }
+
+function copyDailyShare(victory, score, depth){
+  const run = state.run;
+  const seed = (run && run.dailySeed) || todaySeed();
+  const date = seed.replace('daily-','');
+  const patron = (run && PATRONS[run.patron]) ? PATRONS[run.patron].name : 'A Querent';
+  // Spoiler-free progress bar: one block per act (cleared / in-progress / unreached).
+  let bar = '';
+  for(let a=0; a<ACTS.length; a++){
+    const lo = a*15, hi = lo+15;
+    bar += victory ? '🟪' : (depth >= hi ? '🟪' : (depth > lo ? '🟨' : '⬛'));
+  }
+  const streak = (state.meta.daily && state.meta.daily.streak) || 1;
+  const text = [
+    `🔮 Tarot Run — Daily ${date}`,
+    `${patron}  ${bar}`,
+    victory ? `♔ CROWNED — ${score} pts` : `Fell at floor ${depth} — ${score} pts`,
+    `streak ${streak}🔥 · stephenuffugus.github.io/Tarot_Run`,
+  ].join('\n');
+  try {
+    if(navigator.clipboard && navigator.clipboard.writeText){ navigator.clipboard.writeText(text); }
+    else { const ta = document.createElement('textarea'); ta.value = text; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); }
+  } catch(e){}
+  return text;
+}
+
+function startDailyRun(seed){
+  const pid = dailyPatronFor(seed);
+  state.run = freshRun(seed, pid);
+  state.run.veil = 0;                       // level playing field — always No Veil
+  state.run.maxHp = 60 + mirrorBonusMaxHp();
+  state.run.hp = state.run.maxHp;
+  state.run.daily = true;
+  state.run.dailySeed = seed;
+  // Streak + LOCK: the day is claimed the moment you begin (no re-rolling).
+  const d = state.meta.daily || (state.meta.daily = {});
+  const yseed = daySeedFor(new Date(Date.now() - 86400000));
+  if(d.lastSeed === yseed) d.streak = (d.streak || 0) + 1;
+  else d.streak = 1;
+  d.lastSeed = seed;
+  d.lastScore = 0; d.lastResult = null;
+  saveState();
+  showScreen('map-screen');
+  renderMap();
 }
 
 function onRunVictory(){ showRunSummary(true); }
@@ -4161,6 +4233,16 @@ function refreshTitle(){
   const discovered = Object.keys(meta.discoveredCards||{}).length;
   const best = (meta.bestScore||0) > 0 ? ` · best ${meta.bestScore}` : '';
   m.textContent = `${discovered}/78 cards · ${meta.runsCompleted||0} crowns${best} · ${meta.insight||0} Insight · ${BUILD}`;
+  // B31 — Daily button reflects today's state.
+  const dailyBtn = document.getElementById('btn-daily');
+  if(dailyBtn){
+    const ts = todaySeed();
+    const inProgress = state.run && state.run.daily && state.run.dailySeed === ts;
+    const doneToday = meta.daily && meta.daily.lastSeed === ts && !inProgress;
+    if(inProgress){ dailyBtn.textContent = "Resume Today's Spread"; dailyBtn.classList.remove('dim'); }
+    else if(doneToday){ dailyBtn.textContent = `Daily done — ${meta.daily.lastScore||0} pts`; dailyBtn.classList.add('dim'); }
+    else { dailyBtn.textContent = "Today's Spread"; dailyBtn.classList.remove('dim'); }
+  }
 }
 
 /* =====================================================================
@@ -4260,19 +4342,27 @@ document.getElementById('btn-codex').onclick = () => {
 document.getElementById('btn-codex-back').onclick = () => { showScreen('title-screen'); refreshTitle(); };
 document.getElementById('btn-pile-back').onclick = () => { showScreen('combat-screen'); renderCombat(); };
 document.getElementById('btn-daily').onclick = () => {
-  const today = new Date();
-  const seed = `daily-${today.getUTCFullYear()}-${today.getUTCMonth()+1}-${today.getUTCDate()}`;
-  state.run = freshRun(seed);
-  // Daily is a level playing field — always No Veil, so seeds are comparable.
-  // B29 — also normalize HP: freshRun derives the starting pool from the
-  // player's selected Veil (54/48/44 at high rungs), which would otherwise
-  // leak into the Veil-0 daily and break fairness between players on a seed.
-  state.run.veil = 0;
-  state.run.maxHp = 60 + mirrorBonusMaxHp();
-  state.run.hp = state.run.maxHp;
-  saveState();
-  showScreen('map-screen');
-  renderMap();
+  const seed = todaySeed();
+  // Already mid-daily for today → resume it.
+  if(state.run && state.run.daily && state.run.dailySeed === seed){
+    showScreen(state.run.combat ? 'combat-screen' : 'map-screen');
+    if(state.run.combat) renderCombat(); else renderMap();
+    return;
+  }
+  // Already spent today's single attempt → no re-rolls; show the result.
+  if(state.meta.daily && state.meta.daily.lastSeed === seed){
+    const d = state.meta.daily;
+    showModal({
+      title: "Today's Spread is Read",
+      sub: 'One reading a day. Come back tomorrow for a new tower.',
+      body: `<div class="rs-daily">🔮 Daily ${seed.replace('daily-','')}</div><div class="rs-row"><span>Result</span><b>${d.lastResult==='win'?'♔ Crowned':'Fell'}</b></div><div class="rs-row"><span>Score</span><b>${d.lastScore||0}</b></div><div class="rs-row"><span>Streak</span><b>${d.streak||1}🔥</b></div>`,
+      choices: [{ label:'Close', onClick:()=>{} }]
+    });
+    return;
+  }
+  // Starting the daily abandons any non-daily run in progress.
+  if(state.run && !state.run.daily && !confirm("Begin today's Daily Spread? Your current run will end.")) return;
+  startDailyRun(seed);
 };
 // B14 — walk the enemy's strike through visually. endTurn() stays fully
 // synchronous (tests rely on it); this only PACES the reveal of a result
@@ -4436,6 +4526,7 @@ if('serviceWorker' in navigator){
 }
 
 loadState();
+migrateMeta();   // B31 — ensure meta defaults (daily, bestScore, …) exist even for a brand-new player (no save → loadState returns early)
 refreshTitle();
 hydrateArt();
 
