@@ -1138,7 +1138,7 @@ body::after{
    ========================================================================= */
 
 const VERSION = 1;
-const BUILD = 'B24 · THE SHADOW DECK';  // visible on title; read it back to confirm you're current
+const BUILD = 'B25 · THE VEILS RISE';  // visible on title; read it back to confirm you're current
 const SAVE_KEY = 'tarot-run-v1';
 
 /* ----- SEEDABLE RNG ----- */
@@ -1862,13 +1862,32 @@ const state = {
    Veil 0 is the base game. Each cleared run unlocks the next. Mods are
    applied at run/combat start (see applyVeil). Long-term mastery hook. */
 const VEILS = [
-  { name:'No Veil',    desc:'The tower as written.',                         mods:{} },
-  { name:'Veil I',     desc:'Enemies have +12% HP.',                          mods:{ enemyHp:1.12 } },
-  { name:'Veil II',    desc:'+12% enemy HP. The Hermit heals less (30%).',    mods:{ enemyHp:1.12, restHeal:0.30 } },
-  { name:'Veil III',   desc:'+12% HP. Less rest. Enemies hit ~10% harder.',   mods:{ enemyHp:1.12, restHeal:0.30, enemyDmg:1.10 } },
-  { name:'Veil IV',    desc:'All the above, and you start with 54 HP.',       mods:{ enemyHp:1.12, restHeal:0.30, enemyDmg:1.10, maxHp:54 } },
-  { name:'Veil V',     desc:'Harsher still. Enemies +20% HP, hit +20%.',      mods:{ enemyHp:1.20, restHeal:0.30, enemyDmg:1.20, maxHp:54 } },
+  { name:'No Veil',    desc:'The tower as written.',                              mods:{} },
+  { name:'Veil I',     desc:'Enemies have +12% HP.',                              mods:{ enemyHp:1.12 } },
+  { name:'Veil II',    desc:'…and the Hermit heals less (rest mends 32%, not 40%).', mods:{ enemyHp:1.12, restHeal:0.32 } },
+  { name:'Veil III',   desc:'…and every enemy hits ~10% harder.',                 mods:{ enemyHp:1.12, restHeal:0.32, enemyDmg:1.10 } },
+  { name:'Veil IV',    desc:'…and you begin the climb with 54 HP, not 60.',       mods:{ enemyHp:1.12, restHeal:0.32, enemyDmg:1.10, maxHp:54 } },
+  { name:'Veil V',     desc:'…and enemies swell to +20% HP.',                     mods:{ enemyHp:1.20, restHeal:0.32, enemyDmg:1.10, maxHp:54 } },
+  { name:'Veil VI',    desc:'…and their blows land +25% harder.',                 mods:{ enemyHp:1.20, restHeal:0.32, enemyDmg:1.25, maxHp:54 } },
+  { name:'Veil VII',   desc:'…and rest barely mends you (25%).',                  mods:{ enemyHp:1.20, restHeal:0.25, enemyDmg:1.25, maxHp:54 } },
+  { name:'Veil VIII',  desc:'…and you start at 48 HP.',                           mods:{ enemyHp:1.20, restHeal:0.25, enemyDmg:1.25, maxHp:48 } },
+  { name:'Veil IX',    desc:'…and enemies reach +30% HP.',                        mods:{ enemyHp:1.30, restHeal:0.25, enemyDmg:1.25, maxHp:48 } },
+  { name:'Veil X',     desc:'The deepest dark. +30% HP, +40% damage, 44 HP.',     mods:{ enemyHp:1.30, restHeal:0.25, enemyDmg:1.40, maxHp:44 } },
 ];
+
+/* veilMod — the single source of truth for the chosen run's difficulty.
+   run.veil is set at run start from meta.selectedVeil (clamped to what the
+   player has unlocked). Every difficulty site reads THROUGH this, so the
+   ladder is honored everywhere at once. Defaults make Veil 0 byte-identical
+   to the pre-Veil game (sims/old saves unaffected — no VERSION bump). */
+function veilModsActive(){
+  const v = (state.run && state.run.veil) || 0;
+  return (VEILS[v] && VEILS[v].mods) || {};
+}
+function veilMod(key, fallback){
+  const m = veilModsActive();
+  return (m[key] != null) ? m[key] : fallback;
+}
 
 /* ============ THE MIRROR — spend Insight on permanent talents ============
    Modest, run-spanning upgrades. Costs escalate per rank. Kept small on
@@ -1974,13 +1993,20 @@ function freshRun(seedStr, patronId){
   const deck = buildPatronDeck(patron.primary);
   shuffleInPlace(deck, rng);
 
+  // THE VEILS — which difficulty the player chose, clamped to what they've
+  // unlocked. Read the maxHp floor straight from the chosen Veil's mods so
+  // the starting pool is right from frame one. Veil 0 → 60, the base game.
+  const veilIdx = Math.min((state.meta.selectedVeil) || 0, (state.meta.veil) || 0);
+  const baseMax = ((VEILS[veilIdx] && VEILS[veilIdx].mods && VEILS[veilIdx].mods.maxHp) || 60) + mirrorBonusMaxHp();
+
   return {
     seed: seedStr, rngSeed: seed,
     patron: patron.id,
+    veil: veilIdx,       // B25 — the lifted Veil for THIS run (difficulty mods)
     spread: [],          // claimed Arcana boon ids (persistent run passives)
     act: 1,              // B22 — which of ACTS we're climbing (1-based)
     floor: 0,
-    hp: 60 + mirrorBonusMaxHp(), maxHp: 60 + mirrorBonusMaxHp(),
+    hp: baseMax, maxHp: baseMax,
     gold: mirrorBonusGold(),
     relics: [patron.relic],
     deck, // full owned deck (for reward display)
@@ -2106,7 +2132,7 @@ function startCombat(enemyId){
   if(mirrorBonusWard() > 0) player.buffs.ward = (player.buffs.ward || 0) + mirrorBonusWard();
 
   const enemy = {
-    hp: enemyDef.hp + Math.floor(globalDepth() * 1.2),
+    hp: Math.round((enemyDef.hp + Math.floor(globalDepth() * 1.2)) * veilMod('enemyHp', 1)),
     maxHp: 0,
     block: 0,
     debuffs: {},
@@ -2531,7 +2557,7 @@ function globalDepth(){
 // resolution and the on-screen telegraph call this, so the number shown is
 // always exactly the number that hits.
 function scaledEnemyHit(ctx, base){
-  let dmg = (base + Math.floor(globalDepth() * ENEMY_FLOOR_SCALE)) * ENEMY_DMG_MULT;
+  let dmg = (base + Math.floor(globalDepth() * ENEMY_FLOOR_SCALE)) * ENEMY_DMG_MULT * veilMod('enemyDmg', 1);
   if(ctx.enemy.debuffs && ctx.enemy.debuffs.strength) dmg += ctx.enemy.debuffs.strength;
   if(ctx.enemy.debuffs && ctx.enemy.debuffs.weak) dmg *= 0.75;
   return Math.max(0, Math.round(dmg));
@@ -2736,7 +2762,9 @@ function enterNextAct(){
   run.act = (run.act || 1) + 1;
   run.floor = 0;
   run.path = generatePath(mulberry32(run.rngSeed + run.act * 7919), run.act);
-  const mend = Math.floor(run.maxHp * 0.30);
+  // Inter-act mend scales with the Veil's rest factor (0.40 base → 0.30 mend;
+  // a Veil that guts rest also guts the between-act bind-up, proportionally).
+  const mend = Math.floor(run.maxHp * 0.30 * (veilMod('restHeal', 0.4) / 0.4));
   run.hp = Math.min(run.maxHp, run.hp + mend);
   const nextAct = ACTS[run.act - 1];
   saveState();
@@ -2757,6 +2785,9 @@ function onRunVictory(){
   // Unlock the next Veil of difficulty
   const clearedVeil = (state.run && state.run.veil) || 0;
   state.meta.veil = Math.max(state.meta.veil || 0, Math.min(clearedVeil + 1, VEILS.length - 1));
+  // Nudge the next run toward the freshly unlocked rung — the "one more,
+  // harder" pull. The player can always dial back down in the Veil picker.
+  if(clearedVeil >= (state.meta.selectedVeil || 0)) state.meta.selectedVeil = state.meta.veil;
   saveState();
   showModal({
     title: 'The Crown Falls',
@@ -2842,8 +2873,8 @@ function showRestModal(){
     title: 'A Quiet Wing',
     sub: 'The candles have not been lit yet.',
     choices: [
-      { icon:'♥', label:`Rest`, note:`Heal ${Math.min(25, Math.floor(state.run.maxHp * 0.4))} HP.`,
-        onClick: () => { state.run.hp = Math.min(state.run.maxHp, state.run.hp + Math.floor(state.run.maxHp * 0.4)); advanceFloor(); } },
+      { icon:'♥', label:`Rest`, note:`Heal ${Math.min(25, Math.floor(state.run.maxHp * veilMod('restHeal', 0.4)))} HP.`,
+        onClick: () => { state.run.hp = Math.min(state.run.maxHp, state.run.hp + Math.min(25, Math.floor(state.run.maxHp * veilMod('restHeal', 0.4)))); advanceFloor(); } },
       { icon:'✦', label:`Study a card`, note:`Permanently +2 to one card's Strike / Pierce / Block / Heal.`,
         onClick: () => { showStudyModal(); } },
       { icon:'✎', label:`The Hermit's Bargain`, note:`Banish a card from your deck forever — thin the deck, sharpen your draws.`,
@@ -3835,8 +3866,35 @@ function choosePatron(){
     sub: 'Choose your Patron. They set your hand, your gift, and your road.',
     choices: Object.values(PATRONS).map(p => ({
       icon: p.glyph, label: p.name, note: p.tagline,
-      onClick: () => startRun(p.id)
+      onClick: () => chooseVeil(p.id)
     }))
+  });
+}
+
+// B25 — after the Patron, pick which Veil to lift. Only shown once the
+// player has cleared a run (meta.veil > 0); otherwise it's silent and the
+// run starts at No Veil, exactly as before. This is the long-term mastery
+// ladder: each clear unlocks the next, harder rung.
+function chooseVeil(patronId){
+  const maxVeil = state.meta.veil || 0;
+  if(maxVeil <= 0){ startRun(patronId); return; }
+  const choices = [];
+  for(let i = 0; i <= maxVeil; i++){
+    const v = VEILS[i];
+    const tags = [];
+    if(i === maxVeil) tags.push('highest you\'ve unlocked');
+    if(i === (state.meta.selectedVeil || 0)) tags.push('last chosen');
+    choices.push({
+      icon: i === 0 ? '○' : '◈',
+      label: v.name,
+      note: v.desc + (tags.length ? `  —  ${tags.join(' · ')}` : ''),
+      onClick: () => { state.meta.selectedVeil = i; saveState(); startRun(patronId); }
+    });
+  }
+  showModal({
+    title: 'Which Veil will you lift?',
+    sub: 'Each Veil makes the Tower crueller — and the climb mean more. Clear a run to unlock the next.',
+    choices
   });
 }
 document.getElementById('btn-new-run').onclick = () => {
@@ -3892,6 +3950,7 @@ document.getElementById('btn-daily').onclick = () => {
   const today = new Date();
   const seed = `daily-${today.getUTCFullYear()}-${today.getUTCMonth()+1}-${today.getUTCDate()}`;
   state.run = freshRun(seed);
+  state.run.veil = 0;   // Daily is a level playing field — always No Veil, so seeds are comparable
   saveState();
   showScreen('map-screen');
   renderMap();
