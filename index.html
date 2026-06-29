@@ -917,6 +917,26 @@ body::after{
   text-align: center;
 }
 .modal-choices{ display:flex; flex-direction: column; gap: 10px; }
+/* B30 — end-of-run summary (The Reckoning) */
+.rs-row{ display:flex; justify-content:space-between; align-items:baseline;
+  padding:5px 10px; border-bottom:1px solid rgba(212,165,116,0.14);
+  font-size:14px; color:var(--card-cream); text-align:left; }
+.rs-row span{ color:rgba(244,234,212,0.72); }
+.rs-row b{ color:var(--ornament-gold); font-variant-numeric:tabular-nums; }
+.rs-score{ margin-top:14px; text-align:center; font-family:var(--font-display);
+  letter-spacing:0.08em; color:var(--card-cream); font-size:17px; }
+.rs-score b{ color:var(--footlight-glow); font-size:26px; display:block; margin-top:2px; }
+.rs-record{ display:inline-block; margin-top:4px; color:#ffd36a;
+  text-shadow:0 0 10px rgba(255,211,106,0.6); font-size:14px; letter-spacing:0.1em; }
+.rs-best{ display:inline-block; margin-top:4px; color:rgba(212,165,116,0.7); font-size:13px; }
+.rs-veil{ text-align:center; margin-bottom:14px; padding:10px;
+  border:1px solid var(--ornament-gold); border-radius:6px;
+  background:radial-gradient(circle at 50% 0%, rgba(212,165,116,0.18), transparent 70%);
+  color:#ffd36a; font-family:var(--font-display); letter-spacing:0.1em;
+  text-shadow:0 0 12px rgba(255,211,106,0.5); animation: rsVeilGlow 1.4s ease-in-out infinite alternate; }
+.rs-veil-sub{ margin-top:5px; font-size:12px; font-family:var(--font-body); font-style:italic;
+  color:var(--card-cream); letter-spacing:0; text-shadow:none; }
+@keyframes rsVeilGlow{ from{ box-shadow:0 0 6px rgba(255,211,106,0.2); } to{ box-shadow:0 0 18px rgba(255,211,106,0.5); } }
 .modal-choice{
   display: flex; align-items:center; gap: 10px;
   padding: 10px 14px;
@@ -1147,7 +1167,7 @@ body::after{
    ========================================================================= */
 
 const VERSION = 1;
-const BUILD = 'B29 · SAFE PASSAGE';  // visible on title; read it back to confirm you're current
+const BUILD = 'B30 · THE RECKONING';  // visible on title; read it back to confirm you're current
 const SAVE_KEY = 'tarot-run-v1';
 
 /* ----- SEEDABLE RNG ----- */
@@ -1691,6 +1711,7 @@ function dealDamage(ctx, raw){
     dmg -= blocked;
   }
   ctx.enemy.hp = Math.max(0, ctx.enemy.hp - dmg);
+  if(state.run && state.run.tally && dmg > state.run.tally.biggestHit) state.run.tally.biggestHit = dmg;
   return { damage: dmg, blocked };
 }
 function dealPierce(ctx, raw){
@@ -1700,6 +1721,7 @@ function dealPierce(ctx, raw){
   if(ctx.enemy.debuffs.vulnerable) dmg = Math.floor(dmg * 1.5);
   if(ctx.player.debuffs.weak) dmg = Math.floor(dmg * 0.75);
   ctx.enemy.hp = Math.max(0, ctx.enemy.hp - dmg);
+  if(state.run && state.run.tally && dmg > state.run.tally.biggestHit) state.run.tally.biggestHit = dmg;
   return { pierce: dmg };
 }
 function gainBlock(ctx, raw){
@@ -2069,6 +2091,10 @@ function freshRun(seedStr, patronId){
     path,
     currentNode: null,
     combat: null,
+    // B30 — run records, scored + shown in the end-of-run summary.
+    tally: { enemiesSlain:0, elitesSlain:0, bossesSlain:0, chainsDetonated:0,
+             propheciesFulfilled:0, cardsPlayed:0, biggestHit:0, longestChain:0 },
+    daily: false,        // B31 — set true by the Daily Spread
   };
 }
 
@@ -2296,11 +2322,14 @@ function playCard(handIdx){
   ctx.player.hand.splice(handIdx, 1);
   ctx.player.energy -= effectiveCost;
   ctx.combat.cardsPlayedThisTurn += 1;
+  if(state.run && state.run.tally) state.run.tally.cardsPlayed++;
 
   // Commit the chain (only now that the card is actually played)
   if(MINOR){
     ctx.combat.chainSuit = card.suit;
     ctx.combat.chainCount = prospectiveChain;
+    if(state.run && state.run.tally && prospectiveChain > state.run.tally.longestChain)
+      state.run.tally.longestChain = prospectiveChain;
   }
   ctx.chainBonus = MINOR ? chainBonusFor(ctx.combat.chainCount) : 0;
 
@@ -2326,6 +2355,7 @@ function playCard(handIdx){
     const _pb = document.getElementById('aspect-banner');
     if(ctx.combat.prophecyProgress >= 3){
       ctx.combat.prophecyDone = true;
+      if(state.run && state.run.tally) state.run.tally.propheciesFulfilled++;
       healPlayer(ctx, 12);
       dealDamage(ctx, 12);
       ctx.player.maxEnergy += 1;
@@ -2411,6 +2441,7 @@ function playCard(handIdx){
 
 function triggerAspect(suit){
   const ctx = getCtx();
+  if(state.run && state.run.tally) state.run.tally.chainsDetonated++;
   const banner = document.getElementById('aspect-banner');
   let text = '';
   // B21 — the chain-of-3 capstone hits ~1.5× harder. It's the payoff
@@ -2731,6 +2762,11 @@ function onCombatWin(){
   const enemy = ENEMY_BY_ID[run.combat.enemyId];
   const isElite = enemy.elite;
   const isBoss = enemy.boss;
+  if(run.tally){
+    run.tally.enemiesSlain++;
+    if(isElite) run.tally.elitesSlain++;
+    if(isBoss) run.tally.bossesSlain++;
+  }
 
   // Reward pool tier based on floor
   let pool;
@@ -2782,17 +2818,7 @@ function showSpreadModal(choices){
 }
 
 function onCombatLoss(){
-  state.meta.runsAttempted += 1;
-  const gained = awardInsight(false);
-  saveState();
-  showModal({
-    title: 'The Reading Cuts',
-    body: `You reached floor ${state.run.floor + 1} of 15.<br><br><strong>+${gained} Insight</strong> &nbsp;·&nbsp; ${state.meta.insight} total`,
-    sub: `Every reading teaches. Spend Insight at The Mirror.`,
-    choices: [
-      { label: 'Return to the Library', onClick: () => { state.run = null; saveState(); showScreen('title-screen'); refreshTitle(); } }
-    ]
-  });
+  showRunSummary(false);
 }
 
 /* =====================================================================
@@ -2871,26 +2897,76 @@ function enterNextAct(){
   });
 }
 
-function onRunVictory(){
-  state.meta.runsCompleted += 1;
-  state.meta.bestFloor = Math.max(state.meta.bestFloor, ACTS.length * 15);
-  const gained = awardInsight(true);
-  // Unlock the next Veil of difficulty
-  const clearedVeil = (state.run && state.run.veil) || 0;
-  state.meta.veil = Math.max(state.meta.veil || 0, Math.min(clearedVeil + 1, VEILS.length - 1));
-  // Nudge the next run toward the freshly unlocked rung — the "one more,
-  // harder" pull. The player can always dial back down in the Veil picker.
-  if(clearedVeil >= (state.meta.selectedVeil || 0)) state.meta.selectedVeil = state.meta.veil;
+// B30 · THE RECKONING — one score that values the WHOLE run (depth, kills,
+// engine payoffs, survival) and rises with the Veil you dared. The summary
+// closes the loop on EVERY run so even a loss is forward motion.
+function computeScore(victory){
+  const run = state.run; const t = (run && run.tally) || {};
+  const depth = globalDepth();
+  const hpPct = (run && run.maxHp) ? (run.hp / run.maxHp) : 0;
+  let s = 0;
+  s += depth * 100;                          // every floor climbed
+  s += (t.elitesSlain||0) * 60;
+  s += (t.bossesSlain||0) * 200;
+  s += (t.chainsDetonated||0) * 12;          // engine payoffs
+  s += (t.propheciesFulfilled||0) * 50;
+  s += Math.round((t.biggestHit||0) * 1.5);
+  if(victory){ s += 1500 + Math.round(hpPct * 500); }   // crown + survival
+  s = Math.round(s * (1 + 0.25 * ((run && run.veil) || 0)));  // Veil multiplier
+  return Math.max(0, s);
+}
+
+function showRunSummary(victory){
+  const run = state.run;
+  const t = (run && run.tally) || {};
+  const depth = globalDepth();
+  const gained = awardInsight(victory);
+  state.meta.runsAttempted = (state.meta.runsAttempted || 0) + 1;
+  state.meta.bestFloor = Math.max(state.meta.bestFloor || 0, depth);
+  let veilLine = '';
+  if(victory){
+    state.meta.runsCompleted = (state.meta.runsCompleted || 0) + 1;
+    // Unlock the next Veil; nudge the next run toward it (the climb pull).
+    const clearedVeil = (run && run.veil) || 0;
+    const before = state.meta.veil || 0;
+    state.meta.veil = Math.max(before, Math.min(clearedVeil + 1, VEILS.length - 1));
+    if(clearedVeil >= (state.meta.selectedVeil || 0)) state.meta.selectedVeil = state.meta.veil;
+    if(state.meta.veil > before){
+      veilLine = `<div class="rs-veil">✦ ${VEILS[state.meta.veil].name} UNLOCKED ✦<div class="rs-veil-sub">${VEILS[state.meta.veil].desc}</div></div>`;
+    }
+  }
+  const score = computeScore(victory);
+  const prevBest = state.meta.bestScore || 0;
+  const isRecord = score > prevBest;
+  if(isRecord) state.meta.bestScore = score;
   saveState();
+
+  const rows = [];
+  rows.push(['Depth reached', victory ? 'The Crown ♔' : `Floor ${depth}`]);
+  rows.push(['Enemies felled', (t.enemiesSlain||0)]);
+  if(t.elitesSlain) rows.push(['Elites slain', t.elitesSlain]);
+  if(t.bossesSlain) rows.push(['Keepers broken', t.bossesSlain]);
+  if(t.chainsDetonated) rows.push(['Aspects detonated', t.chainsDetonated]);
+  if(t.propheciesFulfilled) rows.push(['Prophecies fulfilled', t.propheciesFulfilled]);
+  if(t.longestChain) rows.push(['Longest chain', '×' + t.longestChain]);
+  if(t.biggestHit) rows.push(['Biggest blow', t.biggestHit]);
+  rows.push(['Insight earned', '+' + gained]);
+  const list = rows.map(r => `<div class="rs-row"><span>${r[0]}</span><b>${r[1]}</b></div>`).join('');
+  const scoreLine = `<div class="rs-score">SCORE <b>${score}</b> ${isRecord ? '<span class="rs-record">★ NEW BEST</span>' : `<span class="rs-best">best ${prevBest}</span>`}</div>`;
+
+  const choices = [
+    { label: 'Return to the Library', onClick: () => { state.run = null; saveState(); showScreen('title-screen'); refreshTitle(); } }
+  ];
+
   showModal({
-    title: 'The Crown Falls',
-    body: `Three keepers, three floors of the dark — and at the bottom the Fool of crowns sees his own face and laughs once before silence.<br><br><strong>+${gained} Insight</strong> &nbsp;·&nbsp; ${state.meta.insight} total`,
-    sub: `Veil ${state.meta.veil} unlocked. You climbed the whole Tower.`,
-    choices: [
-      { label: 'Return to the Library', onClick: () => { state.run = null; saveState(); showScreen('title-screen'); refreshTitle(); } }
-    ]
+    title: victory ? 'The Crown Falls' : 'The Reading Cuts',
+    sub: victory ? `You climbed the whole Tower${(run && run.veil) ? ` under ${VEILS[run.veil].name}` : ''}.` : 'Every reading teaches. Spend Insight at The Mirror.',
+    body: `${veilLine}${list}${scoreLine}`,
+    choices, hideClose: true
   });
 }
+
+function onRunVictory(){ showRunSummary(true); }
 
 /* =====================================================================
    8. MODALS — Reward, Rest, Event, Treasure, Generic
@@ -4060,6 +4136,8 @@ function migrateMeta(){
   if(m.selectedVeil == null) m.selectedVeil = 0;
   if(m.relicsFound == null) m.relicsFound = {};
   if(m.discoveredCards == null) m.discoveredCards = {};
+  if(m.bestScore == null) m.bestScore = 0;     // B30
+  if(m.daily == null) m.daily = {};            // B31 — { lastPlayed, lastScore, streak }
 }
 // Insight earned at the end of a run — you always progress, win or lose.
 function awardInsight(victory){
@@ -4081,7 +4159,8 @@ function refreshTitle(){
     document.getElementById('btn-new-run').textContent = 'Begin the Reading';
   }
   const discovered = Object.keys(meta.discoveredCards||{}).length;
-  m.textContent = `${discovered}/78 cards · ${meta.runsCompleted||0} crowns · ${meta.insight||0} Insight · ${BUILD}`;
+  const best = (meta.bestScore||0) > 0 ? ` · best ${meta.bestScore}` : '';
+  m.textContent = `${discovered}/78 cards · ${meta.runsCompleted||0} crowns${best} · ${meta.insight||0} Insight · ${BUILD}`;
 }
 
 /* =====================================================================
