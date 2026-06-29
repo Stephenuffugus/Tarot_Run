@@ -824,6 +824,15 @@ body::after{
 .card.suit-pents{ border-color: var(--suit-pents-deep); }
 .card.suit-pents .card-name{ color: var(--suit-pents-deep); }
 .card.suit-pents .card-suit-mark{ color: var(--suit-pents); }
+.card.suit-curse{
+  background: linear-gradient(170deg, #2a2630, #16131a);
+  border-color: #4a4350;
+  box-shadow: inset 0 0 18px rgba(0,0,0,0.6);
+}
+.card.suit-curse .card-name{ color: #b9a7c4; font-family: var(--font-display); }
+.card.suit-curse .card-suit-mark,
+.card.suit-curse .card-cost{ color: #7d6f8a; }
+.card.suit-curse .card-art{ background: radial-gradient(circle at 50% 40%, #322b3a, #100d14); }
 .card.suit-major{
   background: linear-gradient(170deg, #f8e9ba, #e0c87f);
   border-color: var(--ornament-gold);
@@ -1138,7 +1147,7 @@ body::after{
    ========================================================================= */
 
 const VERSION = 1;
-const BUILD = 'B27 · THE WANDERING ROAD';  // visible on title; read it back to confirm you're current
+const BUILD = 'B28 · TRUE GUARD';  // visible on title; read it back to confirm you're current
 const SAVE_KEY = 'tarot-run-v1';
 
 /* ----- SEEDABLE RNG ----- */
@@ -1189,8 +1198,8 @@ function pickRand(arr, rng){ return arr[Math.floor(rng()*arr.length)]; }
    }
 */
 
-const SUIT_GLYPH = { wands:'⚸', cups:'☥', swords:'⚔', pents:'⛤', major:'✦' };
-const SUIT_NAME  = { wands:'Wands', cups:'Cups', swords:'Swords', pents:'Pentacles', major:'Major' };
+const SUIT_GLYPH = { wands:'⚸', cups:'☥', swords:'⚔', pents:'⛤', major:'✦', curse:'⊘' };
+const SUIT_NAME  = { wands:'Wands', cups:'Cups', swords:'Swords', pents:'Pentacles', major:'Major', curse:'Curse' };
 
 /* Minor Arcana generator. Each suit has its own theme:
    - Wands  (Fire) : attack and burn
@@ -1634,7 +1643,21 @@ const MAJOR_CARDS = [
   },
 ];
 
-const ALL_CARDS = [...MINOR_CARDS, ...MAJOR_CARDS];
+// B28 — real curses. Previously the 'add_curse' enemy intent shoved a
+// beneficial Death Major into the player's pile (a gift, not a curse).
+// A curse is UNPLAYABLE dead weight: it eats a hand slot for the turn and
+// can't be played, exactly like Slay the Spire's curses. `unplayable` is
+// honored by playCard + renderHand; `rarity:'curse'` keeps it out of every
+// reward/draft pool (those filter common/uncommon/rare). play() is a no-op
+// so the test harness (which calls play on every ALL_CARDS entry) is happy.
+const CURSES = [
+  { id:'curse-doubt', name:'Doubt', suit:'curse', cost:1, glyph:'⊘', rarity:'curse', unplayable:true,
+    desc:'Unplayable. A dead weight in the hand until the turn ends.',
+    flavor:'It asks the one question you cannot answer.',
+    play:(ctx)=>({ curse:true }) },
+];
+
+const ALL_CARDS = [...MINOR_CARDS, ...MAJOR_CARDS, ...CURSES];
 const CARD_BY_ID = {};
 ALL_CARDS.forEach(c => { CARD_BY_ID[c.id] = c; });
 const ALL_CARD_IDS = ALL_CARDS.map(c => c.id);
@@ -2237,6 +2260,9 @@ function playCard(handIdx){
   if(!handEntry) return;
   const card = CARD_BY_ID[handEntry.cardId];
   if(!card) return;
+  // B28 — curses are unplayable dead weight; they only leave the hand at
+  // the end-of-turn discard. Refuse with the standard "can't play" shake.
+  if(card.unplayable){ flashUnplayable(handIdx); return; }
 
   // THE CHAIN — consecutive same-suit minor cards build an escalating
   // combo. Off-suit (or a gap) breaks it. Majors are wild: they neither
@@ -2527,6 +2553,10 @@ function turnFate(handIdx){
 
 function endTurn(){
   const ctx = getCtx();
+  // B28 — Cups "Resolve": gain block BEFORE the enemy strikes so it can
+  // actually soak the incoming hit. (It was granted AFTER the attack and
+  // then immediately wiped by the block reset below — completely inert.)
+  if(ctx.player.buffs.resolve){ gainBlock(ctx, 4 * ctx.player.buffs.resolve); }
   // Resolve enemy intent
   if(ctx.enemy.hp > 0){
     resolveEnemyIntent(ctx);
@@ -2546,12 +2576,10 @@ function endTurn(){
   decayStatus(ctx.player.debuffs);
   decayStatus(ctx.enemy.debuffs);
 
-  // Resolve resolve buff (cups Knight): gain block at turn end
-  if(ctx.player.buffs.resolve){ gainBlock(ctx, 4 * ctx.player.buffs.resolve); }
-
-  // Reset block + per-turn
+  // Reset block + per-turn. NOTE: enemy block is intentionally NOT reset
+  // here — it expires at the start of the enemy's own turn (resolveEnemyIntent),
+  // so it persists through the player's turn (B28).
   ctx.player.block = 0;
-  ctx.enemy.block = 0;
   ctx.combat.cardsPlayedThisTurn = 0;
   ctx.combat.chainSuit = null;
   ctx.combat.chainCount = 0;
@@ -2643,6 +2671,13 @@ function resolveEnemyIntent(ctx){
   const intent = ctx.enemy.intent;
   if(!intent) return;
 
+  // B28 — the enemy's block expires at the START of its own turn (STS rule),
+  // then it gains fresh block from this intent. That fresh block now PERSISTS
+  // through the player's next turn (endTurn no longer zeroes it), so Guard
+  // intents matter and the Swords pierce identity (dealPierce ignores block)
+  // finally means something.
+  ctx.enemy.block = 0;
+
   // Primary: damage (every modern intent is an attack)
   if(intent.type === 'attack'){
     const repeats = intent.count || 1;
@@ -2668,7 +2703,9 @@ function resolveEnemyIntent(ctx){
   if(intent.special === 'copy_block'){
     ctx.enemy.block += Math.max(0, ctx.player.block);
   } else if(intent.special === 'add_curse'){
-    ctx.player.discard.push({ cardId:'major-13', reversed:true, ephemeral:false });
+    // B28 — a REAL curse: unplayable dead weight shuffled into your pile
+    // (was a beneficial Death Major — i.e. a gift). It clots a future draw.
+    ctx.player.discard.push({ cardId:'curse-doubt', reversed:false, ephemeral:false });
   }
 }
 
@@ -3433,7 +3470,7 @@ function renderHand(){
     if(chainTax > 0 && effectiveCost > 0){ costEl.classList.add('cost-taxed'); costEl.title = `+${chainTax} chain tax`; }
     if(fateRev){ costEl.classList.add('cost-fate'); costEl.title = 'Reversed — cheaper, but weaker'; }
     else if(hasShadow){ costEl.title = 'Shadow face — a different effect, same cost'; }
-    const playable = ctx.player.energy >= effectiveCost && !(card.suit === 'major' && ctx.combat.currentMajorCast);
+    const playable = !card.unplayable && ctx.player.energy >= effectiveCost && !(card.suit === 'major' && ctx.combat.currentMajorCast);
     el.classList.add(playable ? 'playable' : 'unplayable');
     el.onclick = () => { if(playable) playCard(idx); };
     // long-press / right-click for detail
@@ -3527,7 +3564,7 @@ function renderCombat(){
     if(intent.buff) sub.push(`+ they gain ${formatStatusName(intent.buff.key)} ${intent.buff.value}`);
     if(intent.selfBlock) sub.push(`+ they Guard ${intent.selfBlock}`);
     if(intent.special === 'copy_block') sub.push(`+ they mirror your Block`);
-    if(intent.special === 'add_curse') sub.push(`+ a curse enters your deck`);
+    if(intent.special === 'add_curse') sub.push(`+ a curse clots your draw`);
     ie.className = 'enemy-intent ' + cls;
     ie.innerHTML = `<div class="intent-head">${head}</div><div class="intent-sub">${sub.join(' · ')}</div>`;
   } else { ie.className = 'enemy-intent'; ie.textContent = '—'; }
