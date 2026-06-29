@@ -726,6 +726,8 @@ body::after{
 .card.playable:active{ transform: translateY(-6px) scale(1.02); }
 .card.playable{ filter: brightness(1.04); }
 .card.unplayable{ filter: brightness(0.7) grayscale(0.4); }
+.card.peek-discard{ filter: brightness(0.55) grayscale(0.7); opacity:0.6;
+  outline:2px solid var(--blood); outline-offset:-2px; }
 .card.selected{
   transform: translateY(-18px);
   box-shadow: 0 8px 22px rgba(212,165,116,0.45), 0 0 14px rgba(212,165,116,0.30);
@@ -1170,7 +1172,7 @@ body::after{
    ========================================================================= */
 
 const VERSION = 1;
-const BUILD = 'B33 · THE OPENING HAND';  // visible on title; read it back to confirm you're current
+const BUILD = 'B34 · TRUE SIGHT';  // visible on title; read it back to confirm you're current
 const SAVE_KEY = 'tarot-run-v1';
 
 /* ----- SEEDABLE RNG ----- */
@@ -1521,10 +1523,10 @@ const MAJOR_CARDS = [
     play(ctx){ ctx.combat.turnCostMod = (ctx.combat.turnCostMod||0) - 1; return { costMod:-1 }; }
   },
   { id:'major-2',  name:'The High Priestess',suit:'major', arcanaNum:2,  cost:1, glyph:'☽',
-    desc:'Peek at top 3 of draw pile. Reorder freely.',
+    desc:'Scry: look at the top 3 of your draw. Discard any; keep the rest on top.',
     flavor:'She knows what you are about to deal.',
     rarity:'rare',
-    play(ctx){ return { peekTop: 3 }; }
+    play(ctx){ ctx.combat.pendingChoice = { type:'peek', n:3 }; return { peek:3 }; }
   },
   { id:'major-3',  name:'The Empress',       suit:'major', arcanaNum:3,  cost:1, glyph:'♀',
     desc:'Heal 12. Draw 1.',
@@ -1703,7 +1705,7 @@ function combine(...results){
 
 function dealDamage(ctx, raw){
   // fate (reversed) scales the card's own base; then study/chain/strength
-  let dmg = Math.round(raw * (ctx.fateMult || 1)) + (ctx.studyBonus || 0) + (ctx.chainBonus || 0);
+  let dmg = Math.round(raw * (ctx.fateMult || 1)) + (ctx.studyBonus || 0) + (ctx.chainBonus || 0) + (ctx.reversedBonus || 0);
   if(ctx.player.buffs.strength) dmg += ctx.player.buffs.strength;
   if(ctx.enemy.debuffs.vulnerable) dmg = Math.floor(dmg * 1.5);
   if(ctx.player.debuffs.weak) dmg = Math.floor(dmg * 0.75);
@@ -1719,7 +1721,7 @@ function dealDamage(ctx, raw){
 }
 function dealPierce(ctx, raw){
   // ignores enemy block; fate (reversed) scales the card's own base
-  let dmg = Math.round(raw * (ctx.fateMult || 1)) + (ctx.studyBonus || 0) + (ctx.chainBonus || 0);
+  let dmg = Math.round(raw * (ctx.fateMult || 1)) + (ctx.studyBonus || 0) + (ctx.chainBonus || 0) + (ctx.reversedBonus || 0);
   if(ctx.player.buffs.strength) dmg += ctx.player.buffs.strength;
   if(ctx.enemy.debuffs.vulnerable) dmg = Math.floor(dmg * 1.5);
   if(ctx.player.debuffs.weak) dmg = Math.floor(dmg * 0.75);
@@ -1728,7 +1730,7 @@ function dealPierce(ctx, raw){
   return { pierce: dmg };
 }
 function gainBlock(ctx, raw){
-  let blk = Math.round(raw * (ctx.fateMult || 1)) + (ctx.studyBonus || 0) + (ctx.chainBonus || 0);
+  let blk = Math.round(raw * (ctx.fateMult || 1)) + (ctx.studyBonus || 0) + (ctx.chainBonus || 0) + (ctx.reversedBonus || 0);
   if(ctx.player.buffs.plate) blk += ctx.player.buffs.plate * 2;
   if(ctx.player.debuffs.frail) blk = Math.floor(blk * 0.75);
   ctx.player.block += blk;
@@ -1736,7 +1738,7 @@ function gainBlock(ctx, raw){
 }
 function healPlayer(ctx, raw){
   const before = ctx.player.hp;
-  ctx.player.hp = Math.min(ctx.player.maxHp, ctx.player.hp + Math.round(raw * (ctx.fateMult || 1)) + (ctx.studyBonus || 0) + (ctx.chainBonus || 0));
+  ctx.player.hp = Math.min(ctx.player.maxHp, ctx.player.hp + Math.round(raw * (ctx.fateMult || 1)) + (ctx.studyBonus || 0) + (ctx.chainBonus || 0) + (ctx.reversedBonus || 0));
   const healed = ctx.player.hp - before;
   if(ctx.combat) ctx.combat.healedThisCombat = (ctx.combat.healedThisCombat || 0) + healed;
   return { healing: healed };
@@ -2319,6 +2321,9 @@ function playCard(handIdx){
   // THE TURN OF FATE — a Reversed Minor is cheaper but weaker
   const fateReversed = MINOR && handEntry.reversed && !card.reversedPlay;
   if(fateReversed) effectiveCost = Math.max(0, effectiveCost - 1);
+  // B34 — Judgement's resurrected card honors its "costs 0 this turn" (the
+  // flag was set but never read). Cleared on commit below.
+  if(handEntry.zeroCostThisTurn) effectiveCost = 0;
 
   if(ctx.player.energy < effectiveCost){ flashUnplayable(handIdx); return; }
 
@@ -2330,6 +2335,7 @@ function playCard(handIdx){
 
   // Remove from hand
   ctx.player.hand.splice(handIdx, 1);
+  if(handEntry.zeroCostThisTurn) handEntry.zeroCostThisTurn = false;   // B34 — one free cast, then it's spent
   ctx.player.energy -= effectiveCost;
   ctx.combat.cardsPlayedThisTurn += 1;
   if(state.run && state.run.tally) state.run.tally.cardsPlayed++;
@@ -2346,6 +2352,9 @@ function playCard(handIdx){
   // Run the card's play function (potentially reversed).
   // Studied cards get +2; the Chain bonus rides on top of every effect.
   ctx.studyBonus = handEntry.studied ? 2 : 0;
+  // B34 — Broken Mirror: "Reversed cards have +1 effect" (was un-wired).
+  // Rides the same additive path as study/chain in the four output helpers.
+  ctx.reversedBonus = (handEntry.reversed && state.run.relics.includes('broken-mirror')) ? 1 : 0;
   if(fateReversed) ctx.fateMult = fateMultFor();
   const result = handEntry.reversed && card.reversedPlay
     ? card.reversedPlay(ctx)
@@ -2353,6 +2362,7 @@ function playCard(handIdx){
   ctx.fateMult = 1;
   ctx.studyBonus = 0;
   ctx.chainBonus = 0;
+  ctx.reversedBonus = 0;
   // Empress turns fate's downside into her blessing
   if(fateReversed && state.run.patron === 'empress') healPlayer(ctx, 3);
 
@@ -4027,11 +4037,48 @@ function showDiscardPicker(n, cb){
   cb();
 }
 
+// B34 — a REAL scry (was a no-op). Look at the top N of the draw pile and
+// discard any you don't want; the rest stay on top, in order. Honest to the
+// card text and a genuine tempo/consistency tool (the Priestess's fantasy).
 function showPeekPicker(n){
   const ctx = getCtx();
-  // simple: shuffle reorder (no-op for now)
-  ctx.combat.pendingChoice = null;
-  renderCombat();
+  const veil = document.getElementById('modal-veil');
+  const m = document.getElementById('modal');
+  const top = ctx.player.draw.slice(0, n);
+  if(!top.length){ ctx.combat.pendingChoice = null; renderCombat(); return; }
+  const discardSet = new Set();
+  m.innerHTML = `
+    <div class="modal-title">The High Priestess</div>
+    <div class="modal-sub">The top of your draw, in order. Tap any to mark it for the discard — the rest stay on top.</div>
+    <div class="dv-grid" id="peek-grid"></div>
+    <div class="modal-choices" id="peek-confirm"></div>`;
+  const grid = m.querySelector('#peek-grid');
+  top.forEach((entry, i) => {
+    const card = CARD_BY_ID[entry.cardId];
+    const el = renderCardElement(card, { reversed: entry.reversed });
+    el.classList.add('playable');
+    el.onclick = () => {
+      if(discardSet.has(i)){ discardSet.delete(i); el.classList.remove('peek-discard'); }
+      else { discardSet.add(i); el.classList.add('peek-discard'); }
+    };
+    grid.appendChild(el);
+  });
+  const cc = m.querySelector('#peek-confirm');
+  const btn = document.createElement('div');
+  btn.className = 'modal-choice';
+  btn.innerHTML = `<div class="mc-icon">☽</div><div class="mc-text"><strong>Read the cards</strong><small>Discard the marked; keep the rest on top.</small></div>`;
+  btn.onclick = () => {
+    // splice descending so indices stay valid; discarded cards go to the pile
+    Array.from(discardSet).sort((a,b) => b - a).forEach(i => {
+      const removed = ctx.player.draw.splice(i, 1)[0];
+      if(removed) ctx.player.discard.push(removed);
+    });
+    veil.classList.remove('active');
+    ctx.combat.pendingChoice = null;
+    renderCombat();
+  };
+  cc.appendChild(btn);
+  veil.classList.add('active');
 }
 
 function showTutorPicker(n){
