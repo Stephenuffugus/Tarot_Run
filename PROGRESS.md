@@ -10,24 +10,32 @@
 
 ## ☀️ WAKE-UP SUMMARY  (read me first)
 
-_(finalized at the end of the run — see bottom of file for the live log)_
+**Shipped 13 builds autonomously — B25 → B37 — all tested, committed, pushed,
+and live.** Art is YOURS (per your steer), so every ounce went to PERMANENT,
+non-art value: retention systems, content, real bug fixes, onboarding, depth.
+A competitor-research + code-audit pass (parallel agents) set the priorities.
 
-**TL;DR (provisional):** The biggest gap was ART — the game had real mechanical
-depth across 24 build increments but every card, enemy, and the title were bare
-unicode glyphs. Mission: a complete **ART_BIBLE.txt** (the production manifest)
-**and** a dependency-free **procedural vector-art fallback** so the game *looks*
-finished tonight — plus research/audit/design and permanent game/UX/polish.
+**The headline wins:**
+- **The difficulty ladder is now real** (B25/B37) — it was fully data-defined
+  but completely INERT. Now wired, selectable, 11 rungs, with tactical (not
+  just stat) screws at the top.
+- **Three real combat bugs fixed** (B28) — enemy Block was wiped every turn
+  (Guard intents + the whole Swords *pierce* identity were doing nothing);
+  Cups Resolve granted block too late; the "curse" enemy attack was secretly
+  GIFTING a strong card. ⚠️ Net effect is a modest, intended difficulty bump.
+- **Every run now closes a loop** (B30/B31) — a real score + itemized summary
+  on win OR loss, plus a finished **Daily Spread** (one seed/day, locked
+  attempt, streak, copyable spoiler-free brag).
+- **Every run now feels different** (B26 per-act bestiary, B27 +8 events, B33
+  opening omen, B35 suit-led drafts + 7 relics, B36 Tower dares).
+- **New players get taught** (B32) — just-in-time, once-ever tutorials.
 
-**Mid-run steer from the user (asleep):** "work autonomously, don't ask" +
-"I will make all the damn art for this game later." → Recalibrated:
-- ART_BIBLE.txt is for YOU to execute later → keep it dense + production-ready.
-- Procedural art is a NON-DESTRUCTIVE fallback only. The moment you drop a real
-  `art-slots/card-<id>.png`, `hydrateArt()` auto-overrides it. So it makes the
-  game look finished tonight and steps aside silently when your art lands. I
-  will NOT over-invest in bespoke per-card scenes you intend to replace —
-  systematic, cohesive, suit-coded, good-enough-to-playtest-with.
-- Extra weight shifts to PERMANENT value your art won't touch: confirmed bug
-  fixes, UX-friction removal, game-feel/juice, onboarding, mobile/accessibility.
+Full per-build detail + what to playtest is in **RESUME.md** (top section)
+and **NEXT.md** (PART 0). Memory log: `tarot-overnight-b25-b34.md`.
+
+_Original mission note (kept for context): the run was first scoped toward an
+ART_BIBLE + procedural fallback, then you steered "work autonomously, don't
+ask" + "I'll make all the art later" → all effort moved to permanent depth._
 
 ---
 

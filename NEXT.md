@@ -6,6 +6,28 @@ How this works: **you tick Part 1 while you playtest** (one word per line is eno
 
 ---
 
+## PART 0 — Overnight build verdicts (B25–B37 · NEW, do these first)
+
+The title should read **B37 · DEEPER VEILS**. One word per line is enough.
+- [ ] **Combat feels tougher? (B28)** — enemies now actually HOLD Block (it
+  was being wiped every turn); Swords _pierce_ now ignores it. Is it harder
+  but fairer? Too hard? _→ `ENEMY_DMG_MULT` (0.62)_
+- [ ] **End-of-run summary (B30)** — does the score + "★ NEW BEST" + VEIL
+  UNLOCKED make even a death feel like progress? _→ score weights_
+- [ ] **The Daily Spread (B31)** — a reason to come back daily? Is the
+  copyable share string something you'd post? _→ share format / streak_
+- [ ] **Opening omen (B33)** + **suit-led card rewards (B35)** + **Tower
+  dares (B36)** — does every run feel like it has its own plan now? Any
+  relic too strong / dead? _→ per-relic + offer tuning_
+- [ ] **Distinct acts (B26)** — do Acts II (mirrors) / III (crown) feel like
+  NEW places, or filler? _→ enemy intents/HP_
+- [ ] **The Veils (B25/B37)** — once you clear a run, is "one more, harder"
+  tempting? Do high rungs (chain tax, cursed open) change how you play? _→ rungs_
+- [ ] **Teach pop-ups (B32)** — helpful or annoying? (each fires once ever) _→ wording/trim_
+- [ ] **Events (B27)** — 12 now; any dud, any too strong? _→ per-event_
+
+---
+
 ## PART 1 — Your playtest verdicts (do these on your phone)
 
 For each: does it feel right? If not, the dial I'll turn is in _italics_.

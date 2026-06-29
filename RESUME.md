@@ -2,6 +2,67 @@
 
 When the user says "lets get started", read this first.
 
+---
+
+## ⚡ OVERNIGHT AUTONOMOUS RUN — B25 → B37 (current: B37 · DEEPER VEILS)
+
+Built autonomously in one session (no permission stops), driven by a
+competitor-research + code-audit pass. Every build: `test-cards` 0 err +
+`diag` A–H + `sim` clean, committed & pushed standalone (auto-deployed).
+**Title now reads `B37 · DEEPER VEILS`.** No VERSION bump anywhere.
+
+**What landed (newest first):**
+- **B37 DEEPER VEILS** — high Veil rungs change *tactics*: Chain tax +1
+  (VII+), every fight opens with a curse in your draw (IX+).
+- **B36 TEMPT THE TOWER** — before each elite/boss, opt-in dare (a curse /
+  +3 enemy Strength / −1 energy) for a **guaranteed relic** on the win.
+- **B35 THE GATHERING BUILD** — card rewards now tier by *global depth*
+  (later acts draft stronger) and **lead with your committed suit** so a
+  build assembles; +7 build-defining relics (15→22).
+- **B34 TRUE SIGHT** — fixed 3 dead mechanics: High Priestess is a real
+  **scry**, Judgement's free-cast now works, Broken Mirror's "+1 reversed"
+  now wired.
+- **B33 THE OPENING HAND** — a 1-of-3 run-shaping omen before the first
+  door (seed-deterministic, Daily-fair).
+- **B32 FIRST LIGHT** — just-in-time `teachOnce` tutorials (first fight /
+  Chain / Shadow / Prophecy); Magician flagged for first-timers.
+- **B31 THE DAILY SPREAD** — one shared seed/day, seed-chosen Patron, one
+  locked attempt, streak🔥, **copyable spoiler-free share string**.
+- **B30 THE RECKONING** — every run (win *or* loss) scores + shows an
+  itemized summary with ★ NEW BEST and a loud VEIL-UNLOCKED reveal.
+- **B29 SAFE PASSAGE** — banish can't empty the deck (was unwinnable);
+  daily HP fairness; meta survives a future VERSION bump.
+- **B28 TRUE GUARD** ⚠️ — three REAL combat bugs fixed: **enemy Block was
+  wiped every turn** (Guard intents + Swords *pierce* were inert) → now
+  persists; Cups *Resolve* now soaks; `add_curse` gifted a beneficial Death
+  Major → now a real unplayable curse. **This is a modest, intended
+  difficulty BUMP** — `ENEMY_DMG_MULT` (0.62) is the dial if it's too much.
+- **B27 THE WANDERING ROAD** — events 4 → 12.
+- **B26 A BESTIARY PER ACT** — +10 enemies; Act I (crypt) / II (mirrors) /
+  III (crown) now fight distinct casts (fixes "same setup again").
+- **B25 THE VEILS RISE** — the difficulty ladder is wired & selectable
+  (was fully inert): `veilMod()`, 11 rungs, run-start picker, victory
+  unlock + nudge.
+
+**PLAYTEST — what to FEEL for (then tell me, I turn the dial):**
+- B28: do fights feel tougher/more tactical now enemies hold Block? Is
+  Swords *pierce* finally meaningful? Too hard? → `ENEMY_DMG_MULT`.
+- B30/B31: does the score + summary make a loss feel like progress? Is the
+  Daily a reason to come back? Share string land?
+- B33/B35/B36: does each run feel different (opening omen, suit-led drafts,
+  Tower dares)? Any relic too strong / never worth it?
+- B26: do Acts II/III feel like new places? Any new enemy unfair/filler?
+- B32: are the teach pop-ups helpful or annoying? (each fires once ever.)
+
+**Deliberately NOT done (a design fork for YOU):** the "Insight
+content-unlock shelf" (start with fewer relics/cards/events, unlock the
+rest with Insight). It *gates content you currently get free* — your call,
+not mine to impose. Everything else from the research queue shipped.
+
+See memory `tarot-overnight-b25-b34.md` for the full technical log.
+
+---
+
 ## Where things are (as of B24 · THE SHADOW DECK — every Minor has a true Reversed face)
 
 - **Live game (PERMANENT): https://stephenuffugus.github.io/Tarot_Run/**
