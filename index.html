@@ -1138,7 +1138,7 @@ body::after{
    ========================================================================= */
 
 const VERSION = 1;
-const BUILD = 'B26 · A BESTIARY PER ACT';  // visible on title; read it back to confirm you're current
+const BUILD = 'B27 · THE WANDERING ROAD';  // visible on title; read it back to confirm you're current
 const SAVE_KEY = 'tarot-run-v1';
 
 /* ----- SEEDABLE RNG ----- */
@@ -3192,6 +3192,135 @@ function showEventModal(){
               choices:[{ label:'Onward', onClick:()=>advanceFloor() }] });
           }},
         { icon:'⛒', label:'Walk past', onClick:()=>advanceFloor() },
+      ]
+    },
+
+    // ---- B27 · THE WANDERING ROAD — more doors on the climb. ----
+    {
+      title: "The Gambler's Wake",
+      sub: 'A dead man\'s hand, still warm on the baize.',
+      body: 'Cut the deck. Red, your purse doubles. Black, the table takes half. He is watching from somewhere.',
+      choices: [
+        { icon:'☆', label:'Cut the deck', note:'50/50: double your gold, or lose half', onClick:()=>{
+          if(rng() < 0.5){ const g = state.run.gold; state.run.gold = g * 2;
+            showModal({ title:'Red', body:`The card turns red. Your purse swells to <strong>${state.run.gold} gold</strong>.`, choices:[{ label:'Onward', onClick:()=>advanceFloor() }] });
+          } else { state.run.gold = Math.floor(state.run.gold / 2);
+            showModal({ title:'Black', body:`The card turns black. The table takes its due — <strong>${state.run.gold} gold</strong> remains.`, choices:[{ label:'Onward', onClick:()=>advanceFloor() }] }); }
+        }},
+        { icon:'⛒', label:'Pocket your coins', onClick:()=>advanceFloor() },
+      ]
+    },
+    {
+      title: 'The Tallow Merchant',
+      sub: 'He sells candles that burn your years.',
+      body: 'A stub of grey wax. "Light it," he says, "and what you spend in coin, you keep in the marrow."',
+      choices: [
+        { icon:'♥', label:'Buy the candle', note: state.run.gold>=30 ? '−30 gold → +8 max HP (and heal 8)' : 'Costs 30 gold — you can\'t afford it',
+          onClick:()=>{
+            if(state.run.gold < 30){ advanceFloor(); return; }
+            state.run.gold -= 30; state.run.maxHp += 8; state.run.hp = Math.min(state.run.maxHp, state.run.hp + 8);
+            showModal({ title:'A Longer Wick', body:`Your frame hardens. <strong>+8 max HP</strong>, now ${state.run.hp}/${state.run.maxHp}.`, choices:[{ label:'Onward', onClick:()=>advanceFloor() }] });
+          }},
+        { icon:'⛒', label:'Blow it out', onClick:()=>advanceFloor() },
+      ]
+    },
+    {
+      title: 'The Confessional',
+      sub: 'The grille is cold. Something listens.',
+      body: 'A booth of black wood. You may unburden the deck of one card — no blood, only confession — or leave a tithe and take understanding for it.',
+      choices: [
+        { icon:'✎', label:'Unburden a card', note:'Banish one card from your deck — free, no HP', onClick:()=>{ showBanishModal(); }},
+        { icon:'☽', label:'Leave a tithe', note: state.run.gold>=25 ? '−25 gold → +15 Insight (kept forever)' : 'Costs 25 gold — you can\'t afford it',
+          onClick:()=>{
+            if(state.run.gold < 25){ advanceFloor(); return; }
+            state.run.gold -= 25; state.meta.insight = (state.meta.insight||0) + 15; saveState();
+            showModal({ title:'Understanding', body:`The coin drops out of hearing. <strong>+15 Insight</strong> — ${state.meta.insight} total, yours past death.`, choices:[{ label:'Onward', onClick:()=>advanceFloor() }] });
+          }},
+        { icon:'⛒', label:'Say nothing', onClick:()=>advanceFloor() },
+      ]
+    },
+    {
+      title: 'The Stranger in Motley',
+      sub: 'A different Patron\'s hand reaches out.',
+      body: 'A figure in another reader\'s colors offers you a card from a road not yours. It will cost a little blood to carry someone else\'s suit.',
+      choices: [
+        { icon:'☆', label:'Take the offered card', note:'−5 HP → an uncommon card OUTSIDE your suit', onClick:()=>{
+          const prim = (PATRONS[state.run.patron] && PATRONS[state.run.patron].primary) || 'wands';
+          let pool = ALL_CARDS.filter(c => c.rarity === 'uncommon' && c.suit !== 'major' && c.suit !== prim);
+          if(!pool.length) pool = ALL_CARDS.filter(c => c.rarity === 'uncommon' && c.suit !== 'major');
+          shuffleInPlace(pool, rng);
+          state.run.hp = Math.max(1, state.run.hp - 5);
+          state.run.deck.push({ cardId: pool[0].id, reversed:false });
+          showModal({ title:'A Borrowed Road', body:`You take <strong>${pool[0].name}</strong> into your deck.`, choices:[{ label:'Onward', onClick:()=>advanceFloor() }] });
+        }},
+        { icon:'⛒', label:'Keep to your suit', note:'+12 gold', onClick:()=>{ state.run.gold += 12; advanceFloor(); }},
+      ]
+    },
+    {
+      title: 'The Hall of Echoes',
+      sub: 'Two mirrors, and you between them.',
+      body: 'Stand in the narrow hall and what you carry is carried twice. Press a card to the glass and a second falls into your hands — for a price in blood.',
+      choices: [
+        { icon:'☆', label:'Double a card', note:'−6 HP → copy a random card already in your deck', onClick:()=>{
+          if(!state.run.deck.length){ advanceFloor(); return; }
+          state.run.hp = Math.max(1, state.run.hp - 6);
+          const entry = pickRand(state.run.deck, rng);
+          state.run.deck.push({ cardId: entry.cardId, reversed:false });
+          const card = CARD_BY_ID[entry.cardId];
+          showModal({ title:'Twofold', body:`A second <strong>${card ? card.name : 'card'}</strong> joins your deck.`, choices:[{ label:'Onward', onClick:()=>advanceFloor() }] });
+        }},
+        { icon:'⛒', label:'Walk the hall', note:'+10 gold', onClick:()=>{ state.run.gold += 10; advanceFloor(); }},
+      ]
+    },
+    {
+      title: 'The Moth Court',
+      sub: 'A throng of grey wings around a single lamp.',
+      body: 'They part for your hand if you let them taste it first. Somewhere in the swarm, they say, is something solid.',
+      choices: [
+        { icon:'☆', label:'Reach into the swarm', note:'−10 HP → likely a relic; otherwise +25 gold', onClick:()=>{
+          state.run.hp = Math.max(1, state.run.hp - 10);
+          const undiscovered = RELICS.filter(r => !state.run.relics.includes(r.id));
+          if(undiscovered.length && rng() < 0.55){
+            const r = pickRand(undiscovered, rng);
+            state.run.relics.push(r.id); state.meta.relicsFound[r.id] = true;
+            showModal({ title:'Something Solid', body:`Your fingers close on <strong>${r.name}</strong>.<br><br><em>${r.flavor}</em>`, choices:[{ label:'Onward', onClick:()=>advanceFloor() }] });
+          } else {
+            state.run.gold += 25;
+            showModal({ title:'Only Dust', body:`The swarm yields nothing but a few coins someone lost here. <strong>+25 gold</strong>.`, choices:[{ label:'Onward', onClick:()=>advanceFloor() }] });
+          }
+        }},
+        { icon:'⛒', label:'Leave the lamp', onClick:()=>advanceFloor() },
+      ]
+    },
+    {
+      title: 'The Weighing Scale',
+      sub: 'Blood on one pan, coin on the other.',
+      body: 'An old brass scale, the kind they weigh hearts on. It trades freely, in either direction.',
+      choices: [
+        { icon:'◈', label:'Bleed for coin', note:'−8 HP → +30 gold', onClick:()=>{ state.run.hp = Math.max(1, state.run.hp - 8); state.run.gold += 30; advanceFloor(); }},
+        { icon:'♥', label:'Buy back blood', note: state.run.gold>=30 ? '−30 gold → +15 HP' : 'Costs 30 gold — you can\'t afford it',
+          onClick:()=>{ if(state.run.gold < 30){ advanceFloor(); return; } state.run.gold -= 30; state.run.hp = Math.min(state.run.maxHp, state.run.hp + 15); advanceFloor(); }},
+        { icon:'⛒', label:'Leave the scale', onClick:()=>advanceFloor() },
+      ]
+    },
+    {
+      title: "The Devil's Ledger",
+      sub: 'A contract already half-signed, in your hand.',
+      body: 'Power, offered plainly. The price is written small, at the bottom, in something darker than ink.',
+      choices: [
+        { icon:'☆', label:'Sign', note:'A relic — but lose 6 max HP', onClick:()=>{
+          const undiscovered = RELICS.filter(r => !state.run.relics.includes(r.id));
+          if(undiscovered.length){
+            const r = pickRand(undiscovered, rng);
+            state.run.relics.push(r.id); state.meta.relicsFound[r.id] = true;
+            state.run.maxHp = Math.max(20, state.run.maxHp - 6); state.run.hp = Math.min(state.run.hp, state.run.maxHp);
+            showModal({ title:'Signed', body:`<strong>${r.name}</strong> is yours. The ledger takes <strong>6 max HP</strong> — now ${state.run.hp}/${state.run.maxHp}.`, choices:[{ label:'Onward', onClick:()=>advanceFloor() }] });
+          } else {
+            state.run.gold += 20;
+            showModal({ title:'Nothing Left to Sell You', body:`The Devil shrugs and tosses you <strong>20 gold</strong> for your trouble.`, choices:[{ label:'Onward', onClick:()=>advanceFloor() }] });
+          }
+        }},
+        { icon:'⛒', label:'Refuse', note:'+15 gold', onClick:()=>{ state.run.gold += 15; advanceFloor(); }},
       ]
     }
   ];
