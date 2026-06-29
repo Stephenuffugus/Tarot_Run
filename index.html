@@ -1172,7 +1172,7 @@ body::after{
    ========================================================================= */
 
 const VERSION = 1;
-const BUILD = 'B36 · TEMPT THE TOWER';  // visible on title; read it back to confirm you're current
+const BUILD = 'B37 · DEEPER VEILS';  // visible on title; read it back to confirm you're current
 const SAVE_KEY = 'tarot-run-v1';
 
 /* ----- SEEDABLE RNG ----- */
@@ -1962,10 +1962,10 @@ const VEILS = [
   { name:'Veil IV',    desc:'…and you begin the climb with 54 HP, not 60.',       mods:{ enemyHp:1.12, restHeal:0.32, enemyDmg:1.10, maxHp:54 } },
   { name:'Veil V',     desc:'…and enemies swell to +20% HP.',                     mods:{ enemyHp:1.20, restHeal:0.32, enemyDmg:1.10, maxHp:54 } },
   { name:'Veil VI',    desc:'…and their blows land +25% harder.',                 mods:{ enemyHp:1.20, restHeal:0.32, enemyDmg:1.25, maxHp:54 } },
-  { name:'Veil VII',   desc:'…and rest barely mends you (25%).',                  mods:{ enemyHp:1.20, restHeal:0.25, enemyDmg:1.25, maxHp:54 } },
-  { name:'Veil VIII',  desc:'…and you start at 48 HP.',                           mods:{ enemyHp:1.20, restHeal:0.25, enemyDmg:1.25, maxHp:48 } },
-  { name:'Veil IX',    desc:'…and enemies reach +30% HP.',                        mods:{ enemyHp:1.30, restHeal:0.25, enemyDmg:1.25, maxHp:48 } },
-  { name:'Veil X',     desc:'The deepest dark. +30% HP, +40% damage, 44 HP.',     mods:{ enemyHp:1.30, restHeal:0.25, enemyDmg:1.40, maxHp:44 } },
+  { name:'Veil VII',   desc:'…and the Chain costs 1 more energy per link.',       mods:{ enemyHp:1.20, restHeal:0.32, enemyDmg:1.25, maxHp:54, chainTaxPlus:1 } },
+  { name:'Veil VIII',  desc:'…and rest barely mends you (25%).',                  mods:{ enemyHp:1.20, restHeal:0.25, enemyDmg:1.25, maxHp:54, chainTaxPlus:1 } },
+  { name:'Veil IX',    desc:'…and you start at 48 HP — and every fight opens with a curse in your draw.', mods:{ enemyHp:1.20, restHeal:0.25, enemyDmg:1.25, maxHp:48, chainTaxPlus:1, startCurse:true } },
+  { name:'Veil X',     desc:'The deepest dark. +30% HP, +40% damage, 44 HP.',     mods:{ enemyHp:1.30, restHeal:0.25, enemyDmg:1.40, maxHp:44, chainTaxPlus:1, startCurse:true } },
 ];
 
 /* veilMod — the single source of truth for the chosen run's difficulty.
@@ -2271,6 +2271,8 @@ function startCombat(enemyId){
   run.combatPlayer = player;
   run.combatEnemy = enemy;
 
+  // B37 — high Veils seed every fight with a curse in the draw pile.
+  if(veilMod('startCurse', false)) player.draw.push({ cardId:'curse-doubt', reversed:false });
   // B36 — apply a Tempt-the-Tower dare to THIS fight, if accepted.
   if(run.tempt){
     if(run.tempt.mod === 'strength') enemy.debuffs.strength = (enemy.debuffs.strength || 0) + 3;
@@ -2560,6 +2562,8 @@ function chainTaxFor(prospectiveChain){
   let tax = Math.max(0, Math.min(CHAIN_TAX_CAP, prospectiveChain - CHAIN_TAX_FREE));
   // B35 — Weaver's Thread: keep longer chains affordable.
   if(state.run && state.run.relics && state.run.relics.includes('weavers-thread')) tax = Math.max(0, tax - 1);
+  // B37 — high Veils make the Chain a costlier commitment.
+  if(prospectiveChain > 0) tax += veilMod('chainTaxPlus', 0);
   return tax;
 }
 
