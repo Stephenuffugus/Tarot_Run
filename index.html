@@ -1138,7 +1138,7 @@ body::after{
    ========================================================================= */
 
 const VERSION = 1;
-const BUILD = 'B25 · THE VEILS RISE';  // visible on title; read it back to confirm you're current
+const BUILD = 'B26 · A BESTIARY PER ACT';  // visible on title; read it back to confirm you're current
 const SAVE_KEY = 'tarot-run-v1';
 
 /* ----- SEEDABLE RNG ----- */
@@ -1749,29 +1749,29 @@ function discardChoice(ctx, n){
 // scaled by floor at resolve time (see resolveEnemyIntent).
 const ENEMIES = [
   // Tier 1 — should cost a careless player ~15-22 HP per fight
-  { id:'spectre',   name:'The Spectre',     tier:1, hp:22, glyph:'◌',
+  { id:'spectre',   name:'The Spectre',     tier:1, hp:22, glyph:'◌', acts:[1],
     intents:[ {type:'attack', value:8, desc:'Wail'}, {type:'attack', value:5, selfBlock:5, desc:'Fading slash'}, {type:'attack', value:6, debuff:{key:'weak',value:1}, desc:'Dread reach'} ] },
-  { id:'jackal',    name:'Brass Jackal',    tier:1, hp:28, glyph:'⚛',
+  { id:'jackal',    name:'Brass Jackal',    tier:1, hp:28, glyph:'⚛', acts:[1],
     intents:[ {type:'attack', value:10, desc:'Lunge'}, {type:'attack', value:5, count:2, desc:'Double snap'}, {type:'attack', value:6, buff:{key:'strength',value:2}, desc:'Bristle'} ] },
-  { id:'echoman',   name:'The Echo-Man',    tier:1, hp:24, glyph:'⌭',
+  { id:'echoman',   name:'The Echo-Man',    tier:1, hp:24, glyph:'⌭', acts:[1],
     intents:[ {type:'attack', value:7, desc:'Mimic'}, {type:'attack', value:4, debuff:{key:'weak',value:2}, desc:'Mockery'}, {type:'attack', value:11, desc:'Punctuation'} ] },
 
   // Tier 2 — ~28-40 HP careless
-  { id:'duelist',   name:'The Suit-Duelist', tier:2, hp:45, glyph:'⚔',
+  { id:'duelist',   name:'The Suit-Duelist', tier:2, hp:45, glyph:'⚔', acts:[1,2],
     intents:[ {type:'attack', value:13, desc:'Riposte'}, {type:'attack', value:7, count:2, desc:'Twin thrust'}, {type:'attack', value:8, selfBlock:8, desc:'Parry-cut'}, {type:'attack', value:6, buff:{key:'strength',value:2}, desc:'Set stance'} ] },
-  { id:'reflection',name:'The Reflection',  tier:2, hp:38, glyph:'⊠',
+  { id:'reflection',name:'The Reflection',  tier:2, hp:38, glyph:'⊠', acts:[1,2],
     intents:[ {type:'attack', value:11, desc:'Refract'}, {type:'attack', value:7, count:2, desc:'Doubled strike'}, {type:'attack', value:6, special:'copy_block', desc:'Mirror'} ] },
-  { id:'sleeper',   name:'The Sleeper',     tier:2, hp:52, glyph:'☾',
+  { id:'sleeper',   name:'The Sleeper',     tier:2, hp:52, glyph:'☾', acts:[1,2],
     intents:[ {type:'attack', value:16, desc:'Dream-blade'}, {type:'attack', value:8, debuff:{key:'vulnerable',value:2}, desc:'Lullaby'}, {type:'attack', value:9, selfBlock:10, desc:'Coil'} ] },
 
   // Tier 3 — ~45-60 HP careless
-  { id:'gilded',    name:'The Gilded Idol', tier:3, hp:70, glyph:'⚜',
+  { id:'gilded',    name:'The Gilded Idol', tier:3, hp:70, glyph:'⚜', acts:[1,2],
     intents:[ {type:'attack', value:18, desc:'Golden fist'}, {type:'attack', value:9, count:2, desc:'Twin coronet'}, {type:'attack', value:10, buff:{key:'strength',value:3}, desc:'Anoint'}, {type:'attack', value:8, selfBlock:14, desc:'Shroud'} ] },
   { id:'archivist', name:'The Archivist',   tier:3, hp:62, glyph:'☱',
     intents:[ {type:'attack', value:14, desc:'Citation'}, {type:'attack', value:8, debuff:{key:'weak',value:2}, desc:'Quote'}, {type:'attack', value:9, debuff:{key:'vulnerable',value:2}, desc:'Annotate'}, {type:'attack', value:21, desc:'Footnote'} ] },
 
   // Elites — punishing
-  { id:'twins',     name:'The Reversed Twins', tier:3, hp:78, glyph:'⚭', elite:true,
+  { id:'twins',     name:'The Reversed Twins', tier:3, hp:78, glyph:'⚭', elite:true, acts:[1,2],
     intents:[ {type:'attack', value:10, count:2, desc:'Twin strike'}, {type:'attack', value:19, desc:'Crowned blade'}, {type:'attack', value:7, special:'add_curse', desc:'Cursed cut'} ] },
   { id:'oracle',    name:'The Bound Oracle',  tier:3, hp:88, glyph:'☋', elite:true,
     intents:[ {type:'attack', value:23, desc:'Prophecy'}, {type:'attack', value:9, debuff:{key:'weak',value:3}, desc:'Unsight'}, {type:'attack', value:14, debuff:{key:'vulnerable',value:2}, desc:'Strangle'} ] },
@@ -1805,6 +1805,39 @@ const ENEMIES = [
       {type:'attack', value:9, special:'copy_block', desc:'Mirror your guard'},
       {type:'attack', value:25, desc:'Shatter'},
     ] },
+
+  // ============================================================
+  // B26 · THE NEW DEAD — a bestiary per act, so no act fights the
+  // same cast. `acts:[…]` gates which act(s) an enemy appears in.
+  // Untagged enemies (above) default to ALL acts; the three weakest
+  // act-1 fodder + the act-1 tier-3s/elite are tagged below so they
+  // retire as you climb. HP is the act-1 baseline; globalDepth() then
+  // hardens every one of them the deeper into the Tower they're met.
+  // ============================================================
+
+  // — Act II · The Gallery of Mirrors (glass, reflection, doubling) —
+  { id:'pane', name:'The Silver Pane', tier:1, hp:30, glyph:'▭', acts:[2],
+    intents:[ {type:'attack', value:9, desc:'Edge of glass'}, {type:'attack', value:5, selfBlock:6, desc:'Catch the light'}, {type:'attack', value:6, debuff:{key:'weak',value:1}, desc:'Glare'} ] },
+  { id:'vitrine', name:'The Vitrine Saint', tier:2, hp:48, glyph:'⛯', acts:[2],
+    intents:[ {type:'attack', value:12, desc:'Reliquary strike'}, {type:'attack', value:7, selfBlock:12, desc:'Seal the case'}, {type:'attack', value:8, count:2, desc:'Stained shards'} ] },
+  { id:'chorus', name:'A Chorus of Selves', tier:2, hp:50, glyph:'♊', acts:[2,3],
+    intents:[ {type:'attack', value:6, count:3, desc:'Three voices'}, {type:'attack', value:13, desc:'Unison'}, {type:'attack', value:7, buff:{key:'strength',value:2}, desc:'Swell'} ] },
+  { id:'gallery-wraith', name:'The Gallery Wraith', tier:3, hp:68, glyph:'⊡', acts:[2,3],
+    intents:[ {type:'attack', value:16, desc:'Drift through'}, {type:'attack', value:9, debuff:{key:'vulnerable',value:2}, desc:'Cold appraisal'}, {type:'attack', value:8, count:2, desc:'Twinned haunt'}, {type:'attack', value:10, selfBlock:10, desc:'Recede'} ] },
+  { id:'looking-glass', name:'The Looking-Glass Knight', tier:3, hp:86, glyph:'◫', elite:true, acts:[2,3],
+    intents:[ {type:'attack', value:20, desc:'Through the glass'}, {type:'attack', value:9, special:'copy_block', desc:'Mirror your guard'}, {type:'attack', value:8, count:2, desc:'Reflected blades'}, {type:'attack', value:11, debuff:{key:'vulnerable',value:2}, desc:'Hairline'} ] },
+
+  // — Act III · The Crown (royalty, judgment, the weight of the head) —
+  { id:'pretender', name:'The Pretender', tier:2, hp:54, glyph:'♕', acts:[3],
+    intents:[ {type:'attack', value:11, buff:{key:'strength',value:2}, desc:'Claim the throne'}, {type:'attack', value:14, desc:'Borrowed blade'}, {type:'attack', value:7, count:2, desc:'Usurp'} ] },
+  { id:'effigy', name:'The Crowned Effigy', tier:3, hp:66, glyph:'☗', acts:[3],
+    intents:[ {type:'attack', value:12, selfBlock:14, desc:'Wax and gilt'}, {type:'attack', value:15, desc:'Topple'}, {type:'attack', value:8, buff:{key:'strength',value:2}, desc:'Harden'} ] },
+  { id:'chamberlain', name:'The Grey Chamberlain', tier:3, hp:70, glyph:'⚷', acts:[3],
+    intents:[ {type:'attack', value:13, desc:'Protocol'}, {type:'attack', value:8, debuff:{key:'weak',value:2}, desc:'Dismiss'}, {type:'attack', value:9, debuff:{key:'vulnerable',value:2}, desc:'Censure'}, {type:'attack', value:10, selfBlock:12, desc:'Close the doors'} ] },
+  { id:'headsman', name:'The Headsman', tier:3, hp:78, glyph:'⚒', acts:[3],
+    intents:[ {type:'attack', value:24, desc:'The drop'}, {type:'attack', value:11, desc:'Heft the axe'}, {type:'attack', value:9, buff:{key:'strength',value:3}, desc:'Roll the shoulders'} ] },
+  { id:'thorn-crown', name:'The Thorned Crown', tier:3, hp:94, glyph:'♛', elite:true, acts:[3],
+    intents:[ {type:'attack', value:23, desc:'Coronet of nails'}, {type:'attack', value:7, special:'add_curse', desc:'Crown of thorns'}, {type:'attack', value:10, count:2, desc:'Bramble lash'}, {type:'attack', value:12, debuff:{key:'weak',value:2}, desc:'Heavy is the head'} ] },
 ];
 const ENEMY_BY_ID = {}; ENEMIES.forEach(e => ENEMY_BY_ID[e.id] = e);
 
@@ -2016,19 +2049,43 @@ function freshRun(seedStr, patronId){
   };
 }
 
+// B26 — the combat roster for an act. Enemies tagged with `acts:[…]` only
+// appear in those acts; untagged enemies appear in all. Within an act we
+// still want early floors to draw lighter foes (by tier), but if an act has
+// no enemy of the requested tier we fall back to the closest tier present,
+// so every act always has a valid cast and never reaches into another act's.
+function combatEnemiesFor(act, tier){
+  const inAct = ENEMIES.filter(e => !e.elite && !e.boss && (e.acts ? e.acts.includes(act) : true));
+  let pool = inAct.filter(e => e.tier === tier);
+  if(!pool.length && inAct.length){
+    const tiers = Array.from(new Set(inAct.map(e => e.tier))).sort((a,b) => a - b);
+    const atOrBelow = tiers.filter(t => t <= tier);
+    const target = atOrBelow.length ? atOrBelow[atOrBelow.length - 1] : tiers[0];
+    pool = inAct.filter(e => e.tier === target);
+  }
+  if(!pool.length) pool = ENEMIES.filter(e => e.tier === tier && !e.elite && !e.boss); // global safety net
+  return pool;
+}
+function eliteEnemiesFor(act){
+  let pool = ENEMIES.filter(e => e.elite && (e.acts ? e.acts.includes(act) : true));
+  if(!pool.length) pool = ENEMIES.filter(e => e.elite);
+  return pool;
+}
+
 function generatePath(rng, act){
   // 15 floors. Floor 0 is start, 14 is boss. The boss is THIS act's boss.
   // Each floor has 1-2 nodes to choose from. Floor types weighted by depth.
-  const bossId = (ACTS[((act||1)-1)] || ACTS[0]).bossId;
+  act = act || 1;
+  const bossId = (ACTS[(act - 1)] || ACTS[0]).bossId;
   const floors = [];
   for(let i=0;i<15;i++){
     let nodes;
     if(i === 14) nodes = [{ type:'boss', enemyId: bossId }];
-    else if(i === 0) nodes = [{ type:'combat', enemyId: pickRand(ENEMIES.filter(e=>e.tier===1).map(e=>e.id), rng) }];
+    else if(i === 0) nodes = [{ type:'combat', enemyId: pickRand(combatEnemiesFor(act, 1).map(e=>e.id), rng) }];
     else if(i === 4 || i === 9) nodes = [{ type:'treasure' }];
     else if(i === 6 || i === 11) nodes = [{ type:'merchant' }, { type:'rest' }];  // B20 — shop vs heal: a real choice
     else if(i === 8 || i === 12) nodes = [
-      { type:'elite', enemyId: pickRand(ENEMIES.filter(e=>e.elite).map(e=>e.id), rng) },
+      { type:'elite', enemyId: pickRand(eliteEnemiesFor(act).map(e=>e.id), rng) },
       { type:'rest' },
     ];
     else {
@@ -2045,8 +2102,7 @@ function generatePath(rng, act){
         const node = { type };
         if(type === 'combat'){
           const tier = i < 5 ? 1 : (i < 10 ? 2 : 3);
-          const pool = ENEMIES.filter(e => e.tier === tier && !e.elite && !e.boss);
-          node.enemyId = pickRand(pool.map(e=>e.id), rng);
+          node.enemyId = pickRand(combatEnemiesFor(act, tier).map(e=>e.id), rng);
         }
         nodes.push(node);
       }
