@@ -1147,7 +1147,7 @@ body::after{
    ========================================================================= */
 
 const VERSION = 1;
-const BUILD = 'B28 · TRUE GUARD';  // visible on title; read it back to confirm you're current
+const BUILD = 'B29 · SAFE PASSAGE';  // visible on title; read it back to confirm you're current
 const SAVE_KEY = 'tarot-run-v1';
 
 /* ----- SEEDABLE RNG ----- */
@@ -1916,7 +1916,7 @@ const state = {
 
 /* ============ THE VEILS — cumulative difficulty ladder ============
    Veil 0 is the base game. Each cleared run unlocks the next. Mods are
-   applied at run/combat start (see applyVeil). Long-term mastery hook. */
+   read through veilMod() at every difficulty site (B25). Long-term mastery hook. */
 const VEILS = [
   { name:'No Veil',    desc:'The tower as written.',                              mods:{} },
   { name:'Veil I',     desc:'Enemies have +12% HP.',                              mods:{ enemyHp:1.12 } },
@@ -3173,8 +3173,8 @@ function showEventModal(){
       body: 'You can pay a price in HP to redraw your deck — banish one card forever.',
       choices: [
         { icon:'✎', label:'Banish a card', note:'-6 HP, choose a card to remove from your deck', onClick:()=>{
-          state.run.hp = Math.max(1, state.run.hp - 6);
-          showBanishModal();
+          // B29 — pay the HP only if you actually banish (cancelling is free).
+          showBanishModal({ onBanish: () => { state.run.hp = Math.max(1, state.run.hp - 6); } });
         }},
         { icon:'⛒', label:'Pocket the pen', note:'+15 gold', onClick:()=>{ state.run.gold += 15; advanceFloor(); }},
       ]
@@ -3365,12 +3365,19 @@ function showEventModal(){
   showModal(ev);
 }
 
-function showBanishModal(){
+// opts.onBanish() fires ONLY when a card is actually banished (so a caller's
+// price — e.g. the Inkwell's HP cost — is paid on commit, not on open/cancel).
+// B29 — DECK FLOOR: you can never banish your last card (that would leave the
+// next combat with an empty draw pile → an unwinnable fight). The Merchant
+// already guarded this; Rest / Inkwell / Confessional did not.
+function showBanishModal(opts){
+  opts = opts || {};
   const veil = document.getElementById('modal-veil');
   const m = document.getElementById('modal');
+  const canBanish = state.run.deck.length > 1;
   m.innerHTML = `
     <div class="modal-title">Banish a Card</div>
-    <div class="modal-sub">Remove it from your deck forever.</div>
+    <div class="modal-sub">${canBanish ? 'Remove it from your deck forever.' : 'Your deck is too thin to banish another card.'}</div>
     <div class="dv-grid" id="banish-grid"></div>
     <div class="modal-choices" id="banish-cancel"></div>
   `;
@@ -3378,6 +3385,7 @@ function showBanishModal(){
   state.run.deck.forEach((entry, idx) => {
     const card = CARD_BY_ID[entry.cardId];
     const el = renderCardElement(card, { reversed: entry.reversed });
+    if(!canBanish){ el.classList.add('unplayable'); grid.appendChild(el); return; }
     el.classList.add('playable');
     el.onclick = () => {
       if(m._busy) return; m._busy = true;
@@ -3386,6 +3394,7 @@ function showBanishModal(){
       grid.querySelectorAll('.card').forEach(c => { if(c !== el){ c.style.opacity = '0.22'; c.style.pointerEvents = 'none'; } });
       const finish = () => {
         state.run.deck.splice(idx, 1);
+        if(opts.onBanish) opts.onBanish();
         veil.classList.remove('active');
         advanceFloor();
       };
@@ -3396,7 +3405,7 @@ function showBanishModal(){
   const cancel = m.querySelector('#banish-cancel');
   const c = document.createElement('div');
   c.className = 'modal-choice';
-  c.innerHTML = `<div class="mc-icon">⛒</div><div class="mc-text"><strong>Never mind</strong></div>`;
+  c.innerHTML = `<div class="mc-icon">⛒</div><div class="mc-text"><strong>${canBanish ? 'Never mind' : 'Leave it be'}</strong></div>`;
   c.onclick = () => { if(m._busy) return; m._busy = true; veil.classList.remove('active'); advanceFloor(); };
   cancel.appendChild(c);
   m._busy = false;
@@ -4032,8 +4041,11 @@ function loadState(){
     const raw = localStorage.getItem(SAVE_KEY);
     if(!raw) return;
     const d = JSON.parse(raw);
+    // B29 — meta progression (Insight, Mirror, unlocked Veils, Codex) is
+    // additive and backfilled by migrateMeta, so it survives a VERSION bump.
+    // Only the in-progress RUN is version-locked and discarded on mismatch.
+    if(d.meta){ state.meta = d.meta; migrateMeta(); }
     if(d.version !== VERSION) return;
-    if(d.meta) state.meta = d.meta;
     if(d.run) state.run = d.run;
     migrateMeta();
   } catch(e){}
@@ -4172,7 +4184,13 @@ document.getElementById('btn-daily').onclick = () => {
   const today = new Date();
   const seed = `daily-${today.getUTCFullYear()}-${today.getUTCMonth()+1}-${today.getUTCDate()}`;
   state.run = freshRun(seed);
-  state.run.veil = 0;   // Daily is a level playing field — always No Veil, so seeds are comparable
+  // Daily is a level playing field — always No Veil, so seeds are comparable.
+  // B29 — also normalize HP: freshRun derives the starting pool from the
+  // player's selected Veil (54/48/44 at high rungs), which would otherwise
+  // leak into the Veil-0 daily and break fairness between players on a seed.
+  state.run.veil = 0;
+  state.run.maxHp = 60 + mirrorBonusMaxHp();
+  state.run.hp = state.run.maxHp;
   saveState();
   showScreen('map-screen');
   renderMap();
