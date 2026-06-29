@@ -1170,7 +1170,7 @@ body::after{
    ========================================================================= */
 
 const VERSION = 1;
-const BUILD = 'B32 · FIRST LIGHT';  // visible on title; read it back to confirm you're current
+const BUILD = 'B33 · THE OPENING HAND';  // visible on title; read it back to confirm you're current
 const SAVE_KEY = 'tarot-run-v1';
 
 /* ----- SEEDABLE RNG ----- */
@@ -3053,8 +3053,7 @@ function startDailyRun(seed){
   d.lastSeed = seed;
   d.lastScore = 0; d.lastResult = null;
   saveState();
-  showScreen('map-screen');
-  renderMap();
+  showOpeningReading(() => { showScreen('map-screen'); renderMap(); });
 }
 
 function onRunVictory(){ showRunSummary(true); }
@@ -3539,6 +3538,7 @@ function showEventModal(){
 // already guarded this; Rest / Inkwell / Confessional did not.
 function showBanishModal(opts){
   opts = opts || {};
+  const done = opts.onDone || advanceFloor;   // B33 — callers not on the map path (run start) override this
   const veil = document.getElementById('modal-veil');
   const m = document.getElementById('modal');
   const canBanish = state.run.deck.length > 1;
@@ -3563,7 +3563,7 @@ function showBanishModal(opts){
         state.run.deck.splice(idx, 1);
         if(opts.onBanish) opts.onBanish();
         veil.classList.remove('active');
-        advanceFloor();
+        done();
       };
       if(typeof setTimeout === 'function') setTimeout(finish, 780); else finish();
     };
@@ -3573,7 +3573,7 @@ function showBanishModal(opts){
   const c = document.createElement('div');
   c.className = 'modal-choice';
   c.innerHTML = `<div class="mc-icon">⛒</div><div class="mc-text"><strong>${canBanish ? 'Never mind' : 'Leave it be'}</strong></div>`;
-  c.onclick = () => { if(m._busy) return; m._busy = true; veil.classList.remove('active'); advanceFloor(); };
+  c.onclick = () => { if(m._busy) return; m._busy = true; veil.classList.remove('active'); done(); };
   cancel.appendChild(c);
   m._busy = false;
   veil.classList.add('active');   // B19 — every other modal does this; banish never did → it silently never opened
@@ -4296,8 +4296,48 @@ function refreshTitle(){
 function startRun(patronId, seed){
   state.run = freshRun(seed, patronId);
   saveState();
-  showScreen('map-screen');
-  renderMap();
+  showOpeningReading(() => { showScreen('map-screen'); renderMap(); });
+}
+
+// B33 · THE OPENING HAND — a single run-shaping choice before the first
+// door, so every run starts with an identity and a plan (the genre's
+// cheapest "this run feels different" lever). The three offers are picked
+// DETERMINISTICALLY from the run seed, so the Daily stays fair: everyone
+// faces the same opening choice. Pure additive — engine/sim untouched
+// (sims start runs via freshRun(), never startRun, so they never see it).
+function showOpeningReading(done){
+  const run = state.run;
+  const rng = mulberry32(run.rngSeed + 99991);
+  const goToMap = () => { saveState(); done(); };
+  const prim = (PATRONS[run.patron] && PATRONS[run.patron].primary) || 'wands';
+  const addCard = (pool) => { shuffleInPlace(pool, rng); if(pool[0]) run.deck.push({ cardId: pool[0].id, reversed:false }); };
+  const offers = [
+    { icon:'☆', label:'The Gift', note:'A random rare card joins your deck.',
+      apply:()=>{ addCard(ALL_CARDS.filter(c => c.rarity==='rare' && c.suit!=='major')); goToMap(); } },
+    { icon:'⚸', label:'The Edge', note:'An uncommon card of your own suit — sharpen the engine.',
+      apply:()=>{ let p = ALL_CARDS.filter(c => c.rarity==='uncommon' && c.suit===prim); if(!p.length) p = ALL_CARDS.filter(c => c.rarity==='uncommon' && c.suit!=='major'); addCard(p); goToMap(); } },
+    { icon:'✦', label:'The Wild Card', note:'An uncommon card OUTSIDE your suit — a splash.',
+      apply:()=>{ let p = ALL_CARDS.filter(c => c.rarity==='uncommon' && c.suit!=='major' && c.suit!==prim); if(!p.length) p = ALL_CARDS.filter(c => c.rarity==='uncommon' && c.suit!=='major'); addCard(p); goToMap(); } },
+    { icon:'✎', label:'The Cull', note:'Banish a starter now — thin the deck from the first hand.',
+      apply:()=>{ showBanishModal({ onDone: goToMap }); } },
+    { icon:'◈', label:'The Full Purse', note:'Begin the climb with +60 gold.',
+      apply:()=>{ run.gold += 60; goToMap(); } },
+    { icon:'♥', label:'The Strong Heart', note:'+10 max HP for the whole climb.',
+      apply:()=>{ run.maxHp += 10; run.hp += 10; goToMap(); } },
+    { icon:'☽', label:"The Devil's Discount", note:'Take an Arcana boon now — but lose 7 max HP.',
+      apply:()=>{ run.maxHp = Math.max(20, run.maxHp - 7); run.hp = Math.min(run.hp, run.maxHp);
+        const keys = Object.keys(ARCANA_BOONS).filter(k => !run.spread.includes(k));
+        const k = pickRand(keys.length ? keys : Object.keys(ARCANA_BOONS), rng); if(k) run.spread.push(k); goToMap(); } },
+  ];
+  shuffleInPlace(offers, rng);
+  const three = offers.slice(0, 3);
+  showModal({
+    title: 'The Opening Reading',
+    sub: 'Before the first door — set the tone of this run.',
+    body: 'Take one omen into the Tower. The rest fade.',
+    choices: three.map(o => ({ icon:o.icon, label:o.label, note:o.note, onClick:o.apply })),
+    hideClose: true
+  });
 }
 function choosePatron(){
   // B32 — gently steer a brand-new player to the most straightforward Patron
