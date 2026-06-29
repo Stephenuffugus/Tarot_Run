@@ -1172,7 +1172,7 @@ body::after{
    ========================================================================= */
 
 const VERSION = 1;
-const BUILD = 'B34 · TRUE SIGHT';  // visible on title; read it back to confirm you're current
+const BUILD = 'B35 · THE GATHERING BUILD';  // visible on title; read it back to confirm you're current
 const SAVE_KEY = 'tarot-run-v1';
 
 /* ----- SEEDABLE RNG ----- */
@@ -1741,6 +1741,8 @@ function healPlayer(ctx, raw){
   ctx.player.hp = Math.min(ctx.player.maxHp, ctx.player.hp + Math.round(raw * (ctx.fateMult || 1)) + (ctx.studyBonus || 0) + (ctx.chainBonus || 0) + (ctx.reversedBonus || 0));
   const healed = ctx.player.hp - before;
   if(ctx.combat) ctx.combat.healedThisCombat = (ctx.combat.healedThisCombat || 0) + healed;
+  // B35 — Pewter Chalice: a little of every heal sets into Block.
+  if(healed > 0 && state.run && state.run.relics && state.run.relics.includes('pewter-chalice')) ctx.player.block += Math.floor(healed / 3);
   return { healing: healed };
 }
 function drawCards(ctx, n){
@@ -1919,6 +1921,14 @@ const RELICS = [
   { id:'ace-of-aces',   name:'Ace of Aces',      desc:'Aces (any suit) cost 0 to play.', flavor:'The first card in any reading.' },
   { id:'fools-feather', name:"Fool's Feather",   desc:'At combat start: shuffle a free copy of The Fool into your hand.', flavor:'A pale plume, unwilling to settle.' },
   { id:'two-of-coins',  name:'Two of Coins',     desc:'Whenever you defeat an enemy: gain 5 gold.', flavor:'Always one too few, or one too many.' },
+  // B35 — build-defining relics, each wired to one existing hook.
+  { id:'the-tower',     name:'The Tower',        desc:'At combat start: deal 6 damage to the enemy.', flavor:'It was always going to fall.' },
+  { id:'seventh-veil',  name:'The Seventh Veil', desc:'Draw 1 extra card at the start of each combat.', flavor:'Behind the last one, only more cloth.' },
+  { id:'weavers-thread',name:"Weaver's Thread",  desc:'The Chain tax costs 1 less energy (min 0).', flavor:'One long line, never cut.' },
+  { id:'salt-circle',   name:'A Circle of Salt',  desc:'The first hit you would take each combat is prevented.', flavor:'Nothing crosses it uninvited.' },
+  { id:'gilded-frame',  name:'The Gilded Frame', desc:'Whenever you play a Major Arcana: gain 3 Block.', flavor:'It flatters whatever it holds.' },
+  { id:'pewter-chalice',name:'Pewter Chalice',    desc:'Whenever you heal: gain 1 Block per 3 healed.', flavor:'It keeps a little of everything poured into it.' },
+  { id:'loaded-dice',   name:'Loaded Dice',      desc:'+10% chance for cards to draw Reversed.', flavor:'They only ever fall one way.' },
 ];
 const RELIC_BY_ID = {}; RELICS.forEach(r => RELIC_BY_ID[r.id] = r);
 
@@ -2251,6 +2261,8 @@ function startCombat(enemyId){
   };
   enemy.maxHp = enemy.hp;
   enemy.intent = chooseEnemyIntent(enemyDef, enemy, rng);
+  // B35 — The Tower: a 6-damage opener struck before the first hand.
+  if(run.relics.includes('the-tower')) enemy.hp = Math.max(0, enemy.hp - 6);
 
   // Apply reading "Past" effect (drawn but not consumed by play)
   // (The reading reveal happens in UI; effects fire when player chooses to read each card)
@@ -2259,9 +2271,9 @@ function startCombat(enemyId){
   run.combatPlayer = player;
   run.combatEnemy = enemy;
 
-  // initial draw 5
+  // initial draw 5 (The Seventh Veil: +1)
   const ctx = { player, enemy, combat, run };
-  drawCards(ctx, 5);
+  drawCards(ctx, 5 + (run.relics.includes('seventh-veil') ? 1 : 0));
 
   showScreen('combat-screen');
   resetCombatFXState();   // B19 — don't FX the first paint off the last fight's numbers
@@ -2363,6 +2375,10 @@ function playCard(handIdx){
   ctx.studyBonus = 0;
   ctx.chainBonus = 0;
   ctx.reversedBonus = 0;
+  // B35 — Gilded Frame: every Major you cast also raises a small guard.
+  if(card.suit === 'major' && state.run.relics.includes('gilded-frame')) gainBlock(ctx, 3);
+  // B35 — track the suit you're committing to, for archetype reward biasing.
+  if(MINOR){ state.run.suitPlays = state.run.suitPlays || {}; state.run.suitPlays[card.suit] = (state.run.suitPlays[card.suit] || 0) + 1; }
   // Empress turns fate's downside into her blessing
   if(fateReversed && state.run.patron === 'empress') healPlayer(ctx, 3);
 
@@ -2535,7 +2551,10 @@ function chainBonusFor(count){
 const CHAIN_TAX_FREE = 2;
 const CHAIN_TAX_CAP  = 3;
 function chainTaxFor(prospectiveChain){
-  return Math.max(0, Math.min(CHAIN_TAX_CAP, prospectiveChain - CHAIN_TAX_FREE));
+  let tax = Math.max(0, Math.min(CHAIN_TAX_CAP, prospectiveChain - CHAIN_TAX_FREE));
+  // B35 — Weaver's Thread: keep longer chains affordable.
+  if(state.run && state.run.relics && state.run.relics.includes('weavers-thread')) tax = Math.max(0, tax - 1);
+  return tax;
 }
 
 /* THE TURN OF FATE — Minor cards may be drawn Reversed: a universal
@@ -2551,6 +2570,7 @@ function fateChanceFor(){
   const pid = state.run && state.run.patron;
   let ch = pid === 'magician' ? 0 : FATE_BASE_CHANCE;   // Magician forces Upright
   if(state.run && state.run.relics && state.run.relics.includes('broken-mirror')) ch += 0.15;
+  if(state.run && state.run.relics && state.run.relics.includes('loaded-dice')) ch += 0.10;   // B35
   return ch;
 }
 const SUIT_LABEL = { wands:'WANDS', cups:'CUPS', swords:'SWORDS', pents:'PENTACLES' };
@@ -2713,6 +2733,11 @@ function scaledEnemyHit(ctx, base){
 // Apply incoming damage to the player: Block soaks first, then Ward
 // (a persistent shield from Cups), then HP.
 function damagePlayer(ctx, amount){
+  // B35 — A Circle of Salt: ward off the first hit of each combat entirely.
+  if(amount > 0 && ctx.combat && !ctx.combat.saltUsed && state.run && state.run.relics && state.run.relics.includes('salt-circle')){
+    ctx.combat.saltUsed = true;
+    return;
+  }
   let dmg = amount;
   const blocked = Math.min(ctx.player.block, dmg);
   ctx.player.block -= blocked; dmg -= blocked;
@@ -2800,10 +2825,12 @@ function onCombatWin(){
     if(isBoss) run.tally.bossesSlain++;
   }
 
-  // Reward pool tier based on floor
+  // Reward pool tier by GLOBAL depth (B35) — so later acts draft stronger
+  // (act 2 floor 0 is already deep), not reset to commons each act.
+  const depth = globalDepth();
   let pool;
-  if(run.floor < 4) pool = ALL_CARDS.filter(c => c.rarity === 'common' || c.rarity === 'uncommon');
-  else if(run.floor < 9) pool = ALL_CARDS.filter(c => c.rarity === 'uncommon' || c.rarity === 'rare');
+  if(depth < 4) pool = ALL_CARDS.filter(c => c.rarity === 'common' || c.rarity === 'uncommon');
+  else if(depth < 12) pool = ALL_CARDS.filter(c => c.rarity === 'uncommon' || c.rarity === 'rare');
   else pool = ALL_CARDS.filter(c => c.rarity === 'rare');
   // Bias toward more majors for elites/bosses
   if(isElite || isBoss){
@@ -2813,6 +2840,15 @@ function onCombatWin(){
   const offered = [];
   const candidatePool = pool.slice();
   shuffleInPlace(candidatePool, rng);
+  // B35 — ARCHETYPE BIAS: once you've committed to a suit (>=3 Minors played
+  // this run), lead the offering with a matching card so a build can actually
+  // assemble — the "I want to draft into my engine" fantasy.
+  const sp = run.suitPlays || {};
+  const domSuit = ['wands','cups','swords','pents'].sort((a,b) => (sp[b]||0) - (sp[a]||0))[0];
+  if((sp[domSuit] || 0) >= 3){
+    const match = candidatePool.find(c => c.suit === domSuit);
+    if(match) offered.push(match);
+  }
   for(const c of candidatePool){
     if(offered.length >= 3) break;
     if(!offered.find(o => o.id === c.id)) offered.push(c);
