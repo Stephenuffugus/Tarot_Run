@@ -1047,6 +1047,25 @@ body::after{
 </style>
 </head>
 <body>
+<script>
+/* ===== Sky Wolf Studios embed protocol =====
+   The portal (lucidwinds.com/portal/) frames games with ?embed=1 and
+   listens for {sws:'ready'} and {sws:'close'}.
+   Rules when embedded:
+     - NEVER history.back() or navigate location — an iframe with no
+       history entry goes blank (the black-screen bug).
+     - The in-game back/X returns to the game's OWN menu screen.
+     - Only the menu's explicit exit control calls SWS_EXIT(). */
+(function(){
+  var SWS_EMBED=/[?&]embed=1(&|$)/.test(location.search);
+  window.SWS_EMBED=SWS_EMBED;
+  window.SWS_EXIT=function(){
+    if(SWS_EMBED&&parent!==window){try{parent.postMessage({sws:'close'},'*');}catch(e){} return;}
+    location.href='https://lucidwinds.com/portal/';
+  };
+  if(SWS_EMBED&&parent!==window){try{parent.postMessage({sws:'ready'},'*');}catch(e){}}
+})();
+</script>
 <div id="app">
 
   <!-- ============ TITLE SCREEN ============ -->
@@ -1067,6 +1086,7 @@ body::after{
       <button class="btn" id="btn-mirror">The Mirror</button>
       <button class="btn" id="btn-codex">The Library</button>
       <button class="btn tiny" id="btn-daily">Today's Spread</button>
+      <button class="btn tiny dim" id="btn-sws-exit" style="min-height:44px;">&#10094; All Sky Wolf Games</button>
     </div>
     <div class="title-meta" id="title-meta">—</div>
     <div class="flex-grow"></div>
@@ -4571,6 +4591,7 @@ document.getElementById('btn-codex').onclick = () => {
 };
 document.getElementById('btn-codex-back').onclick = () => { showScreen('title-screen'); refreshTitle(); };
 document.getElementById('btn-pile-back').onclick = () => { showScreen('combat-screen'); renderCombat(); };
+document.getElementById('btn-sws-exit').onclick = () => { window.SWS_EXIT(); };
 document.getElementById('btn-daily').onclick = () => {
   const seed = todaySeed();
   // Already mid-daily for today → resume it.
