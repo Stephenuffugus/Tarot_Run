@@ -2,6 +2,9 @@
    Network-first for shell (so deploys propagate fast); cache-first for art assets.
 */
 const CACHE = 'tarot-run-v2';
+/* Only ever delete caches that belong to THIS app. `caches` is shared by the
+   whole origin, so an unfiltered sweep deletes every sibling app's cache too. */
+const OWNED = /^tarot\-run\-/;
 const SHELL = [
   './',
   './index.html',
@@ -16,7 +19,7 @@ self.addEventListener('install', e => {
 self.addEventListener('activate', e => {
   e.waitUntil(
     caches.keys().then(keys =>
-      Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))
+      Promise.all(keys.filter(k => k !== CACHE && OWNED.test(k)).map(k => caches.delete(k)))
     )
   );
   self.clients.claim();
